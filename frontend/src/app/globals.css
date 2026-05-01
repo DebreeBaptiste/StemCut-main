@@ -19,6 +19,14 @@ body {
   min-height: 100vh;
 }
 
+/* Electron titlebar drag region */
+.titlebar {
+  -webkit-app-region: drag;
+}
+.no-drag {
+  -webkit-app-region: no-drag;
+}
+
 /* Scrollbar */
 ::-webkit-scrollbar {
   width: 6px;

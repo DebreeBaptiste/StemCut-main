@@ -9,7 +9,14 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="fr">
-      <body>{children}</body>
+      <body>
+        {/* Zone drag Electron — safe area macOS traffic lights */}
+        <div
+          className="titlebar fixed top-0 left-0 right-0 z-[9999]"
+          style={{ height: '40px', background: 'transparent' }}
+        />
+        {children}
+      </body>
     </html>
   )
 }

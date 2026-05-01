@@ -45,9 +45,11 @@ const WaveTrack = forwardRef<WaveTrackHandle, WaveTrackProps>(
     useEffect(() => {
       if (!containerRef.current) return;
       let ws: import('wavesurfer.js').default | null = null;
+      let cancelled = false;
 
       const init = async () => {
         const WaveSurfer = (await import('wavesurfer.js')).default;
+        if (cancelled) return;
         ws = WaveSurfer.create({
           container: containerRef.current!,
           url,
@@ -65,6 +67,7 @@ const WaveTrack = forwardRef<WaveTrackHandle, WaveTrackProps>(
         wsRef.current = ws;
 
         ws.on('ready', () => {
+          if (cancelled) return;
           const audioCtx = new AudioContext();
           const gainNode = audioCtx.createGain();
           const source = audioCtx.createMediaElementSource(
@@ -84,6 +87,7 @@ const WaveTrack = forwardRef<WaveTrackHandle, WaveTrackProps>(
       init();
 
       return () => {
+        cancelled = true;
         audioCtxRef.current?.close();
         audioCtxRef.current = null;
         gainRef.current = null;

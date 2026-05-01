@@ -1,0 +1,45 @@
+{
+  "name": "stemcut",
+  "version": "1.0.0",
+  "description": "StemCut - Isolez chaque instrument de vos morceaux",
+  "main": "main.js",
+  "scripts": {
+    "start": "NODE_ENV=development electron .",
+    "build": "electron-builder"
+  },
+  "build": {
+    "appId": "com.stemcut.app",
+    "productName": "StemCut",
+    "directories": {
+      "output": "dist"
+    },
+    "mac": {
+      "icon": "icons/icon.icns",
+      "category": "public.app-category.music",
+      "target": ["dmg", "zip"]
+    },
+    "linux": {
+      "icon": "icons/icon.png",
+      "target": ["AppImage", "deb"]
+    },
+    "win": {
+      "icon": "icons/icon.png",
+      "target": ["nsis"]
+    },
+    "files": [
+      "main.js",
+      "icons/**"
+    ],
+    "extraResources": [
+      {
+        "from": "../frontend",
+        "to": "frontend",
+        "filter": ["**/*", "!node_modules"]
+      }
+    ]
+  },
+  "devDependencies": {
+    "electron": "^31.0.0",
+    "electron-builder": "^24.0.0"
+  }
+}

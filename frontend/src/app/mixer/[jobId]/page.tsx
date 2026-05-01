@@ -377,11 +377,11 @@ export default function MixerPage() {
       {/* Header */}
       <header
         className='flex items-center gap-4 px-6 py-4 flex-shrink-0'
-        style={{ borderBottom: '1px solid #1e1e2e' }}
+        style={{ borderBottom: '1px solid #1e1e2e', paddingTop: '48px' }}
       >
         <button
           onClick={() => router.push('/bibliotheque')}
-          className='p-2 rounded-lg text-gray-400 hover:text-white hover:bg-[#1e1e2e] transition-colors'
+          className='no-drag p-2 rounded-lg text-gray-400 hover:text-white hover:bg-[#1e1e2e] transition-colors'
         >
           <ArrowLeft size={18} />
         </button>
@@ -402,7 +402,7 @@ export default function MixerPage() {
           <button
             onClick={handleExport}
             disabled={exporting || !allReady}
-            className='flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold text-white disabled:opacity-40 transition-opacity'
+            className='no-drag flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold text-white disabled:opacity-40 transition-opacity'
             style={{ background: 'linear-gradient(135deg, #7c3aed, #d946ef)' }}
           >
             <Download size={14} />
@@ -478,6 +478,9 @@ export default function MixerPage() {
                   </span>
                 </div>
               </div>
+
+              {/* Separator */}
+              <div className='flex-shrink-0 self-stretch w-px' style={{ background: '#1e1e2e' }} />
 
               {/* Waveform */}
               <div

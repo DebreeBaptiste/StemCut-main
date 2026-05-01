@@ -1,7 +1,10 @@
 {
   "permissions": {
     "allow": [
-      "Bash(.venv/bin/pip install *)"
+      "Bash(.venv/bin/pip install *)",
+      "Bash(cat)",
+      "Bash(/Users/jackson/Movies/StemCut-main/node_modules/electron/dist/Electron.app/Contents/MacOS/Electron /tmp/electron-test)",
+      "Bash(env)"
     ]
   }
 }
