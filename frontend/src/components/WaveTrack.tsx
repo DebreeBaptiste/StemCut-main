@@ -24,12 +24,19 @@ const WaveTrack = forwardRef<WaveTrackHandle, WaveTrackProps>(
   ({ url, color, onReady, onTimeUpdate, onFinish }, ref) => {
     const containerRef = useRef<HTMLDivElement>(null)
     const wsRef = useRef<import('wavesurfer.js').default | null>(null)
+    const gainRef = useRef<GainNode | null>(null)
+    const audioCtxRef = useRef<AudioContext | null>(null)
 
     useImperativeHandle(ref, () => ({
-      play: () => wsRef.current?.play(),
+      play: () => {
+        audioCtxRef.current?.resume()
+        wsRef.current?.play()
+      },
       pause: () => wsRef.current?.pause(),
       seekTo: (f) => wsRef.current?.seekTo(Math.max(0, Math.min(1, f))),
-      setVolume: (v) => wsRef.current?.setVolume(v),
+      setVolume: (v) => {
+        if (gainRef.current) gainRef.current.gain.value = v
+      },
       setPlaybackRate: (r) => wsRef.current?.setPlaybackRate(r),
       getCurrentTime: () => wsRef.current?.getCurrentTime() ?? 0,
       getDuration: () => wsRef.current?.getDuration() ?? 0,
@@ -56,7 +63,18 @@ const WaveTrack = forwardRef<WaveTrackHandle, WaveTrackProps>(
         })
 
         wsRef.current = ws
-        ws.on('ready', () => onReady?.())
+
+        ws.on('ready', () => {
+          const audioCtx = new AudioContext()
+          const gainNode = audioCtx.createGain()
+          const source = audioCtx.createMediaElementSource(ws!.getMediaElement())
+          source.connect(gainNode)
+          gainNode.connect(audioCtx.destination)
+          gainNode.gain.value = 0.7
+          gainRef.current = gainNode
+          audioCtxRef.current = audioCtx
+          onReady?.()
+        })
         ws.on('timeupdate', (t: number) => onTimeUpdate?.(t))
         ws.on('finish', () => onFinish?.())
       }
@@ -64,6 +82,9 @@ const WaveTrack = forwardRef<WaveTrackHandle, WaveTrackProps>(
       init()
 
       return () => {
+        audioCtxRef.current?.close()
+        audioCtxRef.current = null
+        gainRef.current = null
         ws?.destroy()
         wsRef.current = null
       }

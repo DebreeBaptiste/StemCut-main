@@ -43,7 +43,7 @@ export default function MixerPage() {
     vocals: false, drums: false, bass: false, other: false,
   })
   const [volumes, setVolumes] = useState<Record<StemKey, number>>({
-    vocals: 1, drums: 1, bass: 1, other: 1,
+    vocals: 0.7, drums: 0.7, bass: 0.7, other: 0.7,
   })
   const [exporting, setExporting] = useState(false)
 
@@ -265,16 +265,21 @@ export default function MixerPage() {
                     S
                   </button>
                 </div>
-                <input
-                  type="range"
-                  min={0}
-                  max={1}
-                  step={0.01}
-                  value={vol}
-                  onChange={e => handleVolumeChange(key, parseFloat(e.target.value))}
-                  className="w-20"
-                  style={{ accentColor: color }}
-                />
+                <div className="flex items-center gap-1">
+                  <input
+                    type="range"
+                    min={0}
+                    max={2}
+                    step={0.01}
+                    value={vol}
+                    onChange={e => handleVolumeChange(key, parseFloat(e.target.value))}
+                    className="w-20"
+                    style={{ accentColor: color }}
+                  />
+                  <span className="text-xs w-8 text-right" style={{ color: vol > 1 ? color : '#6b7280' }}>
+                    {Math.round(vol * 100)}%
+                  </span>
+                </div>
               </div>
 
               {/* Waveform */}
