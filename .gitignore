@@ -1,0 +1,45 @@
+# Dependencies
+node_modules/
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+
+# Build outputs
+.next/
+out/
+build/
+dist/
+
+# Storage (fichiers audio traités localement)
+storage/
+
+# Logs
+logs/
+*.log
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# System files
+.DS_Store
+Thumbs.db
+
+# Demucs models cache (optionnel, peut être volumineux)
+# ~/.cache/torch/hub/checkpoints/
+
+# TypeScript
+*.tsbuildinfo
+
+# Testing
+coverage/
+.pytest_cache/
