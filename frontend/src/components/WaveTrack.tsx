@@ -93,13 +93,7 @@ const WaveTrack = forwardRef<WaveTrackHandle, WaveTrackProps>(
       // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [url]);
 
-    return (
-      <div
-        ref={containerRef}
-        className='w-full'
-        style={{ pointerEvents: 'none' }}
-      />
-    );
+    return <div ref={containerRef} className="w-full" />
   },
 );
 

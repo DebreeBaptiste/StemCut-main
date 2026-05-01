@@ -482,7 +482,11 @@ export default function MixerPage() {
               {/* Waveform */}
               <div
                 className='flex-1 min-w-0'
-                style={{ cursor: allReady ? (loopMode ? 'crosshair' : 'pointer') : 'default' }}
+                style={{
+                  position: 'relative',
+                  height: 64,
+                  cursor: allReady ? (loopMode ? 'crosshair' : 'pointer') : 'default',
+                }}
                 onMouseDown={handleWaveformMouseDown}
               >
                 <WaveTrack
@@ -495,6 +499,8 @@ export default function MixerPage() {
                   onTimeUpdate={key === 'vocals' ? handleTimeUpdate : undefined}
                   onFinish={key === 'vocals' ? handleFinish : undefined}
                 />
+                {/* Overlay: bloque les events du shadow DOM WaveSurfer */}
+                <div style={{ position: 'absolute', inset: 0, zIndex: 10 }} />
               </div>
             </div>
           );
