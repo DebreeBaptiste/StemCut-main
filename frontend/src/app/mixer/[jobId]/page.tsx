@@ -161,6 +161,13 @@ export default function MixerPage() {
       all.forEach((ws) => ws.pause());
       setIsPlaying(false);
     } else {
+      // Si une boucle est sélectionnée, repositionner au début de la boucle avant de jouer
+      const { enabled, start } = loopRef.current;
+      const dur = durationRef.current;
+      if (enabled && dur > 0) {
+        all.forEach((ws) => ws.seekTo(start / dur));
+        setCurrentTime(start);
+      }
       all.forEach((ws) => ws.play());
       setIsPlaying(true);
     }
@@ -171,6 +178,25 @@ export default function MixerPage() {
     STEMS.forEach(({ key }) => waveRefs.current[key]?.setPlaybackRate(r));
   }, []);
 
+  // Seek all tracks to a given time in seconds
+  const seekAllToTime = useCallback((t: number) => {
+    const dur = durationRef.current;
+    if (!dur) return;
+    STEMS.forEach(({ key }) => waveRefs.current[key]?.seekTo(t / dur));
+    setCurrentTime(t);
+  }, []);
+
+  // Click on a waveform → seek there (unless in loop selection mode)
+  const handleWaveformClick = useCallback(
+    (e: React.MouseEvent<HTMLDivElement>) => {
+      if (!allReady || loopMode) return;
+      const rect = e.currentTarget.getBoundingClientRect();
+      const f = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+      seekAllToTime(f * durationRef.current);
+    },
+    [allReady, loopMode, seekAllToTime],
+  );
+
   // Get audio time from mouse X on the seek bar
   const getTimeFromX = useCallback((clientX: number): number => {
     if (!seekBarRef.current) return 0;
@@ -179,14 +205,19 @@ export default function MixerPage() {
     return f * durationRef.current;
   }, []);
 
-  // Window events for loop selection drag
+  const loopModeRef = useRef(false);
+  useEffect(() => { loopModeRef.current = loopMode; }, [loopMode]);
+
+  // Window events for loop selection drag AND normal scrubbing drag
   useEffect(() => {
     const onMouseMove = (e: MouseEvent) => {
-      if (!selectingRef.current) return;
-      const t = getTimeFromX(e.clientX);
-      const anchor = selectAnchorRef.current;
-      setLoopStart(Math.min(anchor, t));
-      setLoopEnd(Math.max(anchor, t));
+      if (selectingRef.current) {
+        // Loop selection drag
+        const t = getTimeFromX(e.clientX);
+        const anchor = selectAnchorRef.current;
+        setLoopStart(Math.min(anchor, t));
+        setLoopEnd(Math.max(anchor, t));
+      }
     };
     const onMouseUp = () => {
       selectingRef.current = false;
@@ -197,7 +228,7 @@ export default function MixerPage() {
       window.removeEventListener('mousemove', onMouseMove);
       window.removeEventListener('mouseup', onMouseUp);
     };
-  }, [getTimeFromX]);
+  }, [getTimeFromX, seekAllToTime]);
 
   const handleSeekBarMouseDown = useCallback(
     (e: React.MouseEvent<HTMLDivElement>) => {
@@ -209,13 +240,10 @@ export default function MixerPage() {
         setLoopStart(t);
         setLoopEnd(t);
       } else {
-        const dur = durationRef.current;
-        if (!dur) return;
-        STEMS.forEach(({ key }) => waveRefs.current[key]?.seekTo(t / dur));
-        setCurrentTime(t);
+        seekAllToTime(t);
       }
     },
-    [allReady, loopMode, getTimeFromX],
+    [allReady, loopMode, getTimeFromX, seekAllToTime],
   );
 
   const toggleLoopMode = useCallback(() => {
@@ -426,7 +454,11 @@ export default function MixerPage() {
               </div>
 
               {/* Waveform */}
-              <div className='flex-1 min-w-0'>
+              <div
+                className='flex-1 min-w-0'
+                style={{ cursor: allReady && !loopMode ? 'pointer' : 'default' }}
+                onClick={handleWaveformClick}
+              >
                 <WaveTrack
                   ref={(el) => {
                     if (el) waveRefs.current[key] = el;
