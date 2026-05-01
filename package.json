@@ -6,7 +6,8 @@
   "scripts": {
     "electron:dev": "ELECTRON_RUN_AS_NODE= NODE_ENV=development electron .",
     "build:frontend": "cd frontend && npm run build && cp -r .next/static .next/standalone/.next/static && ([ -d public ] && cp -r public .next/standalone/public || true)",
-    "electron:build": "npm run build:frontend && ln -sfn \"$(pwd)/.venv\" _venv && electron-builder; rm -f _venv"
+    "electron:build": "npm run build:frontend && ln -sfn \"$(pwd)/.venv\" _venv && electron-builder; rm -f _venv",
+    "electron:build:x64": "bash scripts/build-x64.sh"
   },
   "build": {
     "appId": "com.stemcut.app",
