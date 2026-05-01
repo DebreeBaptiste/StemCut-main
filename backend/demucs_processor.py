@@ -51,7 +51,7 @@ def process_audio(
     if progress_callback:
         progress_callback(15, f"Démarrage Demucs ({device})...")
 
-    def run_demucs(dev: str) -> int:
+    def run_demucs(dev: str) -> tuple:
         cmd = [
             python_executable, "-m", "demucs",
             "-n", "htdemucs",
@@ -67,16 +67,18 @@ def process_audio(
 
         process = subprocess.Popen(
             cmd,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
             text=True,
             env=env,
         )
 
-        for line in process.stderr:
+        all_lines = []
+        for line in process.stdout:
             line = line.strip()
-            if not line:
-                continue
+            if line:
+                all_lines.append(line)
+                print(f"[demucs/{dev}] {line}", flush=True)
             # tqdm outputs like "Separating track:  74%|███"
             match = re.search(r"(\d+)%", line)
             if match and progress_callback:
@@ -86,18 +88,18 @@ def process_audio(
                 progress_callback(mapped, f"Séparation des stems... {pct}%")
 
         process.wait()
-        return process.returncode
+        return process.returncode, "\n".join(all_lines[-30:])
 
-    returncode = run_demucs(device)
+    returncode, demucs_log = run_demucs(device)
 
     if returncode != 0 and device == "mps":
         print("⚠️ MPS failed, falling back to CPU...", flush=True)
         if progress_callback:
             progress_callback(15, "MPS indisponible, reprise sur CPU...")
-        returncode = run_demucs("cpu")
+        returncode, demucs_log = run_demucs("cpu")
 
     if returncode != 0:
-        raise Exception(f"Demucs a échoué (code {returncode})")
+        raise Exception(f"Demucs a échoué (code {returncode}): {demucs_log}")
 
     if progress_callback:
         progress_callback(82, "Déplacement des fichiers...")

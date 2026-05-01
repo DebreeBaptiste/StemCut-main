@@ -11,7 +11,30 @@ import threading
 import re
 from pathlib import Path
 
+import subprocess
+import tempfile
 import yt_dlp
+import imageio_ffmpeg
+from pydub import AudioSegment
+
+
+def _setup_ffmpeg() -> str:
+    exe = imageio_ffmpeg.get_ffmpeg_exe()
+    tmp_dir = os.path.join(tempfile.gettempdir(), 'stemcut_ffmpeg')
+    os.makedirs(tmp_dir, exist_ok=True)
+
+    # Always recreate symlink — imageio_ffmpeg ne fournit que ffmpeg (pas ffprobe)
+    link = os.path.join(tmp_dir, 'ffmpeg')
+    if os.path.islink(link):
+        os.unlink(link)
+    os.symlink(exe, link)
+
+    os.environ['PATH'] = tmp_dir + os.pathsep + os.environ.get('PATH', '')
+    AudioSegment.converter = os.path.join(tmp_dir, 'ffmpeg')
+    return tmp_dir
+
+
+_FFMPEG_DIR = _setup_ffmpeg()
 
 from demucs_processor import process_audio
 from export_mixer import create_mix
@@ -26,7 +49,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-STORAGE_DIR = Path("../storage")
+STORAGE_DIR = (Path(__file__).parent.parent / "storage").resolve()
 STORAGE_DIR.mkdir(exist_ok=True)
 
 
@@ -39,35 +62,60 @@ def _write_progress(job_dir: Path, progress: int, message: str = "", status: str
 
 # ── Background job ────────────────────────────────────────────────────────────
 
-def _download_youtube(youtube_url: str, job_dir: Path) -> Path:
+def _download_youtube(youtube_url: str, job_dir: Path, progress_cb=None) -> Path:
     video_id_match = re.search(r'(?:v=|youtu\.be/)([a-zA-Z0-9_-]{11})', youtube_url)
     if video_id_match:
         video_id = video_id_match.group(1)
         youtube_url = f"https://www.youtube.com/watch?v={video_id}"
         print(f"🎬 Cleaned YouTube URL: {youtube_url}", flush=True)
 
-    file_path = job_dir / "original.mp3"
+    def _ydl_hook(d):
+        if d['status'] == 'downloading' and progress_cb:
+            pct_str = d.get('_percent_str', '').strip().rstrip('%')
+            try:
+                pct = float(pct_str)
+                mapped = int(3 + pct * 0.09)  # 3% → 12% range
+                progress_cb(mapped, f"YouTube: {d.get('_percent_str', '?').strip()}")
+            except (ValueError, TypeError):
+                pass
+
     ydl_opts = {
+        # Prend le meilleur audio disponible, quelle que soit l'extension
         "format": "bestaudio/best",
         "outtmpl": str(job_dir / "original.%(ext)s"),
-        "postprocessors": [
-            {"key": "FFmpegExtractAudio", "preferredcodec": "mp3", "preferredquality": "192"}
-        ],
         "quiet": True,
         "no_warnings": True,
         "noplaylist": True,
+        "ffmpeg_location": _FFMPEG_DIR,
+        "socket_timeout": 30,
+        "retries": 3,
+        "progress_hooks": [_ydl_hook],
+        # Force iOS/Android client: pas besoin de JS runtime (deno/node)
+        "extractor_args": {"youtube": {"player_client": ["ios", "android"]}},
+        # Pas de FFmpegExtractAudio : imageio_ffmpeg ne fournit pas ffprobe
+        # La conversion MP3 est faite manuellement après téléchargement
     }
 
+    print(f"⬇️  Starting yt-dlp download to {job_dir}", flush=True)
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
         ydl.download([youtube_url])
+    print(f"⬇️  yt-dlp download finished", flush=True)
 
-    if not file_path.exists():
-        candidates = list(job_dir.glob("original.*"))
-        if not candidates:
-            raise Exception("Aucun fichier audio produit depuis l'URL YouTube")
-        file_path = candidates[0]
+    candidates = list(job_dir.glob("original.*"))
+    if not candidates:
+        raise Exception("Aucun fichier audio produit depuis l'URL YouTube")
+    downloaded = candidates[0]
 
-    return file_path
+    mp3_path = job_dir / "original.mp3"
+    if downloaded.suffix.lower() != ".mp3":
+        ffmpeg_exe = os.path.join(_FFMPEG_DIR, 'ffmpeg')
+        subprocess.run(
+            [ffmpeg_exe, '-y', '-i', str(downloaded), '-vn', '-ab', '192k', '-ar', '44100', str(mp3_path)],
+            check=True, capture_output=True,
+        )
+        downloaded.unlink(missing_ok=True)
+
+    return mp3_path
 
 
 def _run_job(
@@ -80,15 +128,15 @@ def _run_job(
     try:
         file_path = saved_file_path
 
+        def on_progress(p: int, msg: str = ""):
+            _write_progress(job_dir, p, msg)
+
         if youtube_url:
             _write_progress(job_dir, 3, "Téléchargement YouTube...")
-            file_path = _download_youtube(youtube_url, job_dir)
+            file_path = _download_youtube(youtube_url, job_dir, progress_cb=on_progress)
             _write_progress(job_dir, 12, "Démarrage de la séparation...")
         else:
             _write_progress(job_dir, 10, "Démarrage de la séparation...")
-
-        def on_progress(p: int, msg: str = ""):
-            _write_progress(job_dir, p, msg)
 
         process_audio(str(file_path), str(job_dir), progress_callback=on_progress)
         _write_progress(job_dir, 100, "Terminé !", status="completed")

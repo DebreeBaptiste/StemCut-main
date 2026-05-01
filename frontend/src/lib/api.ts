@@ -1,3 +1,10 @@
+// En production Electron, Next.js standalone ne proxifie pas /api/* → port 8000
+// On détecte si on est dans Electron via la variable d'env injectée par electron/main.js
+const API_BASE =
+  typeof window !== 'undefined' && (window as unknown as Record<string, unknown>).__ELECTRON__
+    ? 'http://localhost:8000'
+    : ''
+
 export interface Job {
   job_id: string
   created_at: number
@@ -17,7 +24,7 @@ export interface Stems {
 export async function uploadFile(file: File): Promise<{ job_id: string }> {
   const formData = new FormData()
   formData.append('file', file)
-  const res = await fetch('/api/input', { method: 'POST', body: formData })
+  const res = await fetch(`${API_BASE}/api/input`, { method: 'POST', body: formData })
   if (!res.ok) throw new Error(await res.text())
   return res.json()
 }
@@ -25,29 +32,29 @@ export async function uploadFile(file: File): Promise<{ job_id: string }> {
 export async function importYoutube(url: string): Promise<{ job_id: string }> {
   const formData = new FormData()
   formData.append('youtube_url', url)
-  const res = await fetch('/api/input', { method: 'POST', body: formData })
+  const res = await fetch(`${API_BASE}/api/input`, { method: 'POST', body: formData })
   if (!res.ok) throw new Error(await res.text())
   return res.json()
 }
 
 export async function getStems(jobId: string): Promise<{ stems: Stems }> {
-  const res = await fetch(`/api/tracks/${jobId}`)
+  const res = await fetch(`${API_BASE}/api/tracks/${jobId}`)
   if (!res.ok) throw new Error(await res.text())
   return res.json()
 }
 
 export async function listJobs(): Promise<{ jobs: Job[] }> {
-  const res = await fetch('/api/jobs')
+  const res = await fetch(`${API_BASE}/api/jobs`)
   if (!res.ok) throw new Error(await res.text())
   return res.json()
 }
 
 export async function deleteJob(jobId: string): Promise<void> {
-  await fetch(`/api/jobs/${jobId}`, { method: 'DELETE' })
+  await fetch(`${API_BASE}/api/jobs/${jobId}`, { method: 'DELETE' })
 }
 
 export async function exportMix(jobId: string, mutedStems: string[]): Promise<Blob> {
-  const res = await fetch('/api/export', {
+  const res = await fetch(`${API_BASE}/api/export`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ job_id: jobId, muted_stems: mutedStems }),
@@ -57,5 +64,5 @@ export async function exportMix(jobId: string, mutedStems: string[]): Promise<Bl
 }
 
 export function stemStreamUrl(jobId: string, stem: string): string {
-  return `/api/stream/${jobId}/${stem}.mp3`
+  return `${API_BASE}/api/stream/${jobId}/${stem}.mp3`
 }

@@ -160,15 +160,15 @@ export default function HomePage() {
             <br />
             de vos morceaux
           </h1>
-          <p className='text-gray-400 text-base leading-relaxed'>
+          {/*  <p className='text-gray-400 text-base leading-relaxed'>
             StemCut sépare vos pistes audio en 4 stems : voix, batterie, basse
             et instruments. Parfait pour pratiquer, remixer ou créer des backing
             tracks.
-          </p>
+          </p> */}
         </div>
 
         {/* Badges */}
-        <div className='flex flex-wrap justify-center gap-3 mb-10'>
+        {/*   <div className='flex flex-wrap justify-center gap-3 mb-10'>
           {BADGES.map(({ icon: Icon, label }) => (
             <span
               key={label}
@@ -179,7 +179,7 @@ export default function HomePage() {
               {label}
             </span>
           ))}
-        </div>
+        </div> */}
 
         {/* Processing state */}
         {state === 'processing' ? (
@@ -288,46 +288,17 @@ export default function HomePage() {
             )}
           </>
         )}
-
-        {/* Feature cards */}
-        <div className='w-full max-w-lg mt-16'>
-          <p className='text-gray-600 text-xs font-medium tracking-widest uppercase text-center mb-6'>
-            Fonctionnalités
-          </p>
-          <div className='grid grid-cols-2 gap-3'>
-            {FEATURES.map(({ icon: Icon, title, description, color }) => (
-              <div
-                key={title}
-                className='rounded-2xl p-4 flex flex-col gap-2'
-                style={{ background: '#111118', border: '1px solid #1e1e2e' }}
-              >
-                <div
-                  className='w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0'
-                  style={{ background: `${color}22` }}
-                >
-                  <Icon size={16} style={{ color }} />
-                </div>
-                <p className='text-white text-sm font-semibold leading-tight'>
-                  {title}
-                </p>
-                <p className='text-gray-500 text-xs leading-relaxed'>
-                  {description}
-                </p>
-              </div>
-            ))}
-          </div>
-        </div>
       </main>
 
       {/* Footer */}
-      <footer
+      {/*   <footer
         className='py-8 text-center'
         style={{ borderTop: '1px solid #1e1e2e' }}
       >
         <p className='text-gray-600 text-xs'>
           StemCut — Traitement 100 % local · Aucune donnée partagée
         </p>
-      </footer>
+      </footer> */}
     </div>
   );
 }
