@@ -87,3 +87,5 @@ stemcut/
 
 Personal project - Usage local uniquement
 # StemCut
+
+after install type : xattr -cr /Applications/StemCut.app
