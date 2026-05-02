@@ -17,12 +17,12 @@
     "directories": {
       "output": "dist"
     },
+    "afterSign": "scripts/afterSign.js",
     "mac": {
       "icon": "electron/icons/icon.icns",
       "category": "public.app-category.music",
       "target": ["dmg"],
-      "identity": null,
-      "afterSign": "scripts/afterSign.js"
+      "identity": null
     },
     "win": {
       "icon": "electron/icons/icon.png",
