@@ -18,7 +18,11 @@
     "mac": {
       "icon": "electron/icons/icon.icns",
       "category": "public.app-category.music",
-      "target": ["dmg"]
+      "target": ["dmg", "pkg"]
+    },
+    "pkg": {
+      "scripts": "build/pkg-scripts",
+      "allowCurrentUserSudo": true
     },
     "win": {
       "icon": "electron/icons/icon.png",

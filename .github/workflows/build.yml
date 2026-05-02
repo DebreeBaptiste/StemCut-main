@@ -17,14 +17,14 @@ jobs:
           - os: macos-latest # arm64 (Apple Silicon)
             arch: arm64
             python_arch: arm64
-            artifact_name: StemCut-arm64.dmg
-            artifact_glob: dist/StemCut-*arm64.dmg
+            artifact_name: StemCut-arm64.pkg
+            artifact_glob: dist/StemCut-*arm64.pkg
 
           - os: macos-latest # x86_64 via Rosetta (macos-13 déprécié)
             arch: x64
             python_arch: x64
-            artifact_name: StemCut-x64.dmg
-            artifact_glob: dist/StemCut-*.dmg
+            artifact_name: StemCut-x64.pkg
+            artifact_glob: dist/StemCut-*x64.pkg
 
           - os: windows-latest
             arch: x64
@@ -101,6 +101,8 @@ jobs:
       # ── Electron build (macOS) ───────────────────────────────────────────
       - name: Build Electron (macOS arm64)
         if: runner.os == 'macOS' && matrix.arch == 'arm64'
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: "false"
         run: |
           ln -sfn "$(pwd)/.venv" _venv
           npx electron-builder --mac dmg --arm64 --publish never
@@ -108,6 +110,8 @@ jobs:
 
       - name: Build Electron (macOS x64)
         if: runner.os == 'macOS' && matrix.arch == 'x64'
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: "false"
         run: |
           ln -sfn "$(pwd)/.venv" _venv
           npx electron-builder --mac dmg --x64 --publish never

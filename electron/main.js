@@ -29,9 +29,12 @@ function waitForPort(port, timeout = 60000) {
 }
 
 function startBackend() {
+  const pythonBin = process.platform === 'win32'
+    ? path.join('.venv', 'Scripts', 'python.exe')
+    : path.join('.venv', 'bin', 'python');
   const venvPython = IS_DEV
-    ? path.join(ROOT, '.venv', 'bin', 'python')
-    : path.join(process.resourcesPath, '.venv', 'bin', 'python');
+    ? path.join(ROOT, pythonBin)
+    : path.join(process.resourcesPath, pythonBin);
 
   const backendCwd = IS_DEV
     ? path.join(ROOT, 'backend')
