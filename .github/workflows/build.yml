@@ -24,7 +24,7 @@ jobs:
             arch: x64
             python_arch: x64
             artifact_name: StemCut-x64.dmg
-            artifact_glob: dist/StemCut-*x64.dmg
+            artifact_glob: dist/StemCut-*.dmg
 
           - os: windows-latest
             arch: x64
