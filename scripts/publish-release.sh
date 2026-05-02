@@ -22,17 +22,18 @@ read -p "Confirmer la publication ? (y/N) " confirm
 
 COMMIT=$(git rev-parse HEAD)
 
-# Crée la release ET le tag sur GitHub en une seule opération (--target évite de pousser le tag d'abord)
-# Ainsi quand le CI se déclenche, les assets sont déjà présents → build ignoré
-gh release create "$VERSION" \
-  --target "$COMMIT" \
-  --title "StemCut $VERSION" \
-  --generate-notes \
-  "$RELEASE_DIR"/*
-
-# Crée le tag local pour rester en sync
-if ! git tag -l | grep -q "^${VERSION}$"; then
-  git tag "$VERSION"
+if gh release view "$VERSION" &>/dev/null; then
+  echo "Release $VERSION existante — remplacement des assets..."
+  gh release upload "$VERSION" "$RELEASE_DIR"/* --clobber
+else
+  gh release create "$VERSION" \
+    --target "$COMMIT" \
+    --title "StemCut $VERSION" \
+    --generate-notes \
+    "$RELEASE_DIR"/*
+  if ! git tag -l | grep -q "^${VERSION}$"; then
+    git tag "$VERSION"
+  fi
 fi
 
 echo ""
