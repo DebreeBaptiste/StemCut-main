@@ -60,6 +60,7 @@ export default function MixerPage() {
   const [loopMode, setLoopMode] = useState(false);
   const [loopStart, setLoopStart] = useState<number | null>(null);
   const [loopEnd, setLoopEnd] = useState<number | null>(null);
+  const [isSelecting, setIsSelecting] = useState(false);
 
   // Refs to avoid stale closures in event handlers
   const durationRef = useRef(0);
@@ -221,6 +222,7 @@ export default function MixerPage() {
         liveLoopEndRef.current = t;
         setLoopStart(t);
         setLoopEnd(t);
+        setIsSelecting(true);
       } else {
         seekAllToTime(t);
       }
@@ -260,6 +262,7 @@ export default function MixerPage() {
       }
       selectingRef.current = false;
       activeDragRectRef.current = null;
+      setIsSelecting(false);
     };
     window.addEventListener('mousemove', onMouseMove);
     window.addEventListener('mouseup', onMouseUp);
@@ -488,7 +491,7 @@ export default function MixerPage() {
                 style={{
                   position: 'relative',
                   height: 64,
-                  cursor: allReady ? (loopMode ? 'crosshair' : 'pointer') : 'default',
+                  cursor: allReady ? (loopMode ? (isSelecting ? 'ew-resize' : 'crosshair') : 'pointer') : 'default',
                 }}
                 onMouseDown={handleWaveformMouseDown}
               >
@@ -504,6 +507,23 @@ export default function MixerPage() {
                 />
                 {/* Overlay: bloque les events du shadow DOM WaveSurfer */}
                 <div style={{ position: 'absolute', inset: 0, zIndex: 10 }} />
+                {/* Loop selection overlay */}
+                {loopMode && loopStart !== null && loopEnd !== null && loopEnd > loopStart && duration > 0 && (
+                  <div
+                    style={{
+                      position: 'absolute',
+                      top: 0,
+                      bottom: 0,
+                      left: `${(loopStart / duration) * 100}%`,
+                      width: `${((loopEnd - loopStart) / duration) * 100}%`,
+                      background: 'rgba(251, 191, 36, 0.12)',
+                      borderLeft: '2px solid rgba(251, 191, 36, 0.7)',
+                      borderRight: '2px solid rgba(251, 191, 36, 0.7)',
+                      zIndex: 11,
+                      pointerEvents: 'none',
+                    }}
+                  />
+                )}
               </div>
             </div>
           );
@@ -530,7 +550,7 @@ export default function MixerPage() {
           className='relative w-full h-2 rounded-full mb-3 select-none'
           style={{
             background: '#2e2e4e',
-            cursor: allReady ? (loopMode ? 'crosshair' : 'pointer') : 'default',
+            cursor: allReady ? (loopMode ? (isSelecting ? 'ew-resize' : 'crosshair') : 'pointer') : 'default',
             opacity: allReady ? 1 : 0.4,
             pointerEvents: allReady ? 'auto' : 'none',
           }}
@@ -587,23 +607,26 @@ export default function MixerPage() {
           <div className='flex-1' />
 
           {/* Loop button */}
-          <button
-            onClick={toggleLoopMode}
-            disabled={!allReady}
-            title={
-              loopMode
-                ? 'Désactiver la boucle'
-                : 'Mode boucle — sélectionnez un passage'
-            }
-            className='p-2 rounded-lg transition-colors disabled:opacity-40'
-            style={{
-              background: loopMode ? 'rgba(251, 191, 36, 0.12)' : 'transparent',
-              color: loopMode ? '#fbbf24' : '#6b7280',
-              border: `1px solid ${loopMode ? '#fbbf24' : '#2e2e4e'}`,
-            }}
-          >
-            <Repeat size={15} />
-          </button>
+          <div className='relative group'>
+            <button
+              onClick={toggleLoopMode}
+              disabled={!allReady}
+              className='p-2 rounded-lg transition-colors disabled:opacity-40'
+              style={{
+                background: loopMode ? 'rgba(251, 191, 36, 0.12)' : 'transparent',
+                color: loopMode ? '#fbbf24' : '#6b7280',
+                border: `1px solid ${loopMode ? '#fbbf24' : '#2e2e4e'}`,
+              }}
+            >
+              <Repeat size={15} />
+            </button>
+            <div
+              className='absolute bottom-full mb-2 right-0 px-2.5 py-1.5 rounded-lg text-xs text-white whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none'
+              style={{ background: '#1e1e2e', border: '1px solid #2e2e4e' }}
+            >
+              {loopMode ? 'Désactiver la boucle' : 'Sélectionner une section à jouer en boucle'}
+            </div>
+          </div>
 
           {/* Speed */}
           <div
