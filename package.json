@@ -27,7 +27,7 @@
       "target": ["nsis"]
     },
     "nsis": {
-      "closeApplications": true
+      "runAfterFinish": true
     },
     "files": [
       "electron/main.js",
