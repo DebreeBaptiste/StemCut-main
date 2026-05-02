@@ -16,16 +16,19 @@ jobs:
         include:
           - os: macos-latest # arm64 (Apple Silicon)
             arch: arm64
+            python_arch: arm64
             artifact_name: StemCut-arm64.dmg
             artifact_glob: dist/StemCut-*arm64.dmg
 
           - os: macos-latest # x86_64 via Rosetta (macos-13 déprécié)
             arch: x64
+            python_arch: x64
             artifact_name: StemCut-x64.dmg
             artifact_glob: dist/StemCut-*x64.dmg
 
           - os: windows-latest
             arch: x64
+            python_arch: x64
             artifact_name: StemCut-Setup.exe
             artifact_glob: dist/StemCut*.exe
 
@@ -45,6 +48,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
+          architecture: ${{ matrix.python_arch }}
 
       # ── Cache pip ───────────────────────────────────────────────────────
       - uses: actions/cache@v4
@@ -69,12 +73,13 @@ jobs:
           .venv/bin/pip install -r backend/requirements.txt
 
       # ── Python venv + dépendances (macOS x64 via Rosetta) ────────────────
+      # setup-python avec architecture: x64 installe Python 3.11 x86_64 via Rosetta
       - name: Install Python dependencies (macOS x64 via Rosetta)
         if: runner.os == 'macOS' && matrix.arch == 'x64'
         run: |
-          arch -x86_64 /usr/bin/python3 -m venv .venv
-          arch -x86_64 .venv/bin/pip install --upgrade pip
-          arch -x86_64 .venv/bin/pip install -r backend/requirements.txt
+          python -m venv .venv
+          .venv/bin/pip install --upgrade pip
+          .venv/bin/pip install -r backend/requirements.txt
 
       # ── Python venv + dépendances (Windows — PyTorch CPU only) ──────────
       # CPU-only car les runners GH Actions n'ont pas de GPU CUDA
