@@ -90,14 +90,14 @@ jobs:
         if: runner.os == 'macOS' && matrix.arch == 'arm64'
         run: |
           ln -sfn "$(pwd)/.venv" _venv
-          npx electron-builder --mac dmg --arm64
+          npx electron-builder --mac dmg --arm64 --publish never
           rm -f _venv
 
       - name: Build Electron (macOS x64)
         if: runner.os == 'macOS' && matrix.arch == 'x64'
         run: |
           ln -sfn "$(pwd)/.venv" _venv
-          npx electron-builder --mac dmg --x64
+          npx electron-builder --mac dmg --x64 --publish never
           rm -f _venv
 
       # ── Electron build (Windows) ─────────────────────────────────────────
@@ -106,7 +106,7 @@ jobs:
         shell: pwsh
         run: |
           New-Item -ItemType Junction -Path _venv -Target .venv -Force
-          npx electron-builder --win nsis
+          npx electron-builder --win nsis --publish never
           Remove-Item _venv -Force -Recurse -ErrorAction SilentlyContinue
 
       # ── Upload artifact ──────────────────────────────────────────────────
