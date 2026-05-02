@@ -27,6 +27,9 @@
       "icon": "electron/icons/icon.png",
       "target": ["nsis"]
     },
+    "nsis": {
+      "closeApplications": true
+    },
     "files": [
       "electron/main.js",
       "electron/preload.js",
