@@ -1,0 +1,128 @@
+name: Build & Release StemCut
+
+on:
+  push:
+    tags: ['v*.*.*']
+  workflow_dispatch:
+
+permissions:
+  contents: write # nécessaire pour créer une Release GitHub
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest # arm64 (Apple Silicon)
+            arch: arm64
+            artifact_name: StemCut-arm64.dmg
+            artifact_glob: dist/StemCut-*arm64.dmg
+
+          - os: macos-13 # x86_64 (Intel)
+            arch: x64
+            artifact_name: StemCut-x64.dmg
+            artifact_glob: dist/StemCut-*x64.dmg
+
+          - os: windows-latest
+            arch: x64
+            artifact_name: StemCut-Setup.exe
+            artifact_glob: dist/StemCut*.exe
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      # ── Checkout ────────────────────────────────────────────────────────
+      - uses: actions/checkout@v4
+
+      # ── Node.js ─────────────────────────────────────────────────────────
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      # ── Python ──────────────────────────────────────────────────────────
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      # ── Cache pip ───────────────────────────────────────────────────────
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/pip
+            ~\AppData\Local\pip\Cache
+          key: pip-${{ runner.os }}-${{ matrix.arch }}-${{ hashFiles('backend/requirements.txt') }}
+
+      # ── npm install ─────────────────────────────────────────────────────
+      - name: Install npm dependencies
+        run: |
+          npm install
+          cd frontend && npm install
+
+      # ── Python venv + dépendances (macOS) ───────────────────────────────
+      - name: Install Python dependencies (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          python -m venv .venv
+          .venv/bin/pip install --upgrade pip
+          .venv/bin/pip install -r backend/requirements.txt
+
+      # ── Python venv + dépendances (Windows — PyTorch CPU only) ──────────
+      # CPU-only car les runners GH Actions n'ont pas de GPU CUDA
+      - name: Install Python dependencies (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          python -m venv .venv
+          .venv\Scripts\pip install --upgrade pip
+          # PyTorch CPU (évite de télécharger ~2 Go de CUDA inutilement)
+          .venv\Scripts\pip install torch==2.2.0 torchaudio==2.2.0 --index-url https://download.pytorch.org/whl/cpu
+          # Reste des dépendances (torch déjà installé, sera ignoré)
+          .venv\Scripts\pip install -r backend/requirements.txt
+
+      # ── Build frontend Next.js ───────────────────────────────────────────
+      - name: Build frontend
+        run: npm run build:frontend
+
+      # ── Electron build (macOS) ───────────────────────────────────────────
+      - name: Build Electron (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          ln -sfn "$(pwd)/.venv" _venv
+          npx electron-builder --mac dmg --arch ${{ matrix.arch }}
+          rm -f _venv
+
+      # ── Electron build (Windows) ─────────────────────────────────────────
+      - name: Build Electron (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          New-Item -ItemType Junction -Path _venv -Target .venv -Force
+          npx electron-builder --win nsis
+          Remove-Item _venv -Force -Recurse -ErrorAction SilentlyContinue
+
+      # ── Upload artifact ──────────────────────────────────────────────────
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact_name }}
+          path: ${{ matrix.artifact_glob }}
+          if-no-files-found: error
+
+  # ── Créer une Release GitHub avec les 3 artefacts ─────────────────────────
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/')
+
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts/
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: artifacts/**/*
+          generate_release_notes: true

@@ -8,3 +8,4 @@ torchaudio==2.2.0
 numpy<2
 soundfile
 yt-dlp>=2026.3.17
+imageio-ffmpeg
