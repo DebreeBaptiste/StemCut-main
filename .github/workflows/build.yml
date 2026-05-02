@@ -9,7 +9,27 @@ permissions:
   contents: write # nécessaire pour créer une Release GitHub
 
 jobs:
+  # Vérifie si la release a déjà des assets pré-compilés — si oui, le build est ignoré
+  check-prebuilt:
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/')
+    outputs:
+      has_assets: ${{ steps.check.outputs.has_assets }}
+    steps:
+      - name: Check for existing release assets
+        id: check
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          count=$(gh release view ${{ github.ref_name }} --repo ${{ github.repository }} --json assets --jq '.assets | length' 2>/dev/null || echo 0)
+          echo "has_assets=$([ "$count" -gt 0 ] && echo true || echo false)" >> $GITHUB_OUTPUT
+          echo "Assets existants : $count"
+
   build:
+    needs: check-prebuilt
+    if: |
+      always() &&
+      (needs.check-prebuilt.result == 'skipped' || needs.check-prebuilt.outputs.has_assets != 'true')
     strategy:
       fail-fast: false
       matrix:
