@@ -20,7 +20,9 @@
     "mac": {
       "icon": "electron/icons/icon.icns",
       "category": "public.app-category.music",
-      "target": ["dmg"]
+      "target": ["dmg"],
+      "identity": null,
+      "afterSign": "scripts/afterSign.js"
     },
     "win": {
       "icon": "electron/icons/icon.png",
