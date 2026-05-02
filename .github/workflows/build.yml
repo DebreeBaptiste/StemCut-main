@@ -19,7 +19,7 @@ jobs:
             artifact_name: StemCut-arm64.dmg
             artifact_glob: dist/StemCut-*arm64.dmg
 
-          - os: macos-13 # x86_64 (Intel)
+          - os: macos-latest # x86_64 via Rosetta (macos-13 déprécié)
             arch: x64
             artifact_name: StemCut-x64.dmg
             artifact_glob: dist/StemCut-*x64.dmg
@@ -60,13 +60,21 @@ jobs:
           npm install
           cd frontend && npm install
 
-      # ── Python venv + dépendances (macOS) ───────────────────────────────
-      - name: Install Python dependencies (macOS)
-        if: runner.os == 'macOS'
+      # ── Python venv + dépendances (macOS arm64) ──────────────────────────
+      - name: Install Python dependencies (macOS arm64)
+        if: runner.os == 'macOS' && matrix.arch == 'arm64'
         run: |
           python -m venv .venv
           .venv/bin/pip install --upgrade pip
           .venv/bin/pip install -r backend/requirements.txt
+
+      # ── Python venv + dépendances (macOS x64 via Rosetta) ────────────────
+      - name: Install Python dependencies (macOS x64 via Rosetta)
+        if: runner.os == 'macOS' && matrix.arch == 'x64'
+        run: |
+          arch -x86_64 /usr/bin/python3 -m venv .venv
+          arch -x86_64 .venv/bin/pip install --upgrade pip
+          arch -x86_64 .venv/bin/pip install -r backend/requirements.txt
 
       # ── Python venv + dépendances (Windows — PyTorch CPU only) ──────────
       # CPU-only car les runners GH Actions n'ont pas de GPU CUDA
