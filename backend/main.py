@@ -303,6 +303,28 @@ async def list_jobs():
         created_at = job_dir.stat().st_ctime
         total_size = sum(f.stat().st_size for f in job_dir.rglob("*") if f.is_file())
 
+        name = None
+        favorite = False
+        duration_s = None
+        progress_file = job_dir / "progress.json"
+        data: dict = {}
+        if progress_file.exists():
+            with open(progress_file) as f:
+                data = json.load(f)
+            name = data.get("name")
+            favorite = data.get("favorite", False)
+            duration_s = data.get("duration_s")
+
+        if duration_s is None and original_file and original_file.exists():
+            try:
+                audio = AudioSegment.from_file(str(original_file))
+                duration_s = round(len(audio) / 1000)
+                data["duration_s"] = duration_s
+                with open(progress_file, "w") as f:
+                    json.dump(data, f)
+            except Exception:
+                pass
+
         jobs.append({
             "job_id": job_id,
             "created_at": created_at,
@@ -310,10 +332,61 @@ async def list_jobs():
             "stems_ready": stems_ready,
             "size_bytes": total_size,
             "size_mb": round(total_size / (1024 * 1024), 2),
+            "name": name,
+            "favorite": favorite,
+            "duration_s": duration_s,
         })
 
     jobs.sort(key=lambda x: x["created_at"], reverse=True)
     return {"jobs": jobs}
+
+
+class RenameRequest(BaseModel):
+    name: str
+
+
+class FavoriteRequest(BaseModel):
+    favorite: bool
+
+
+@app.patch("/api/jobs/{job_id}/favorite")
+async def set_job_favorite(job_id: str, body: FavoriteRequest):
+    """Met à jour le statut favori d'un job."""
+    job_dir = STORAGE_DIR / job_id
+    if not job_dir.exists():
+        raise HTTPException(status_code=404, detail="Job not found")
+
+    progress_file = job_dir / "progress.json"
+    data: dict = {}
+    if progress_file.exists():
+        with open(progress_file) as f:
+            data = json.load(f)
+
+    data["favorite"] = body.favorite
+    with open(progress_file, "w") as f:
+        json.dump(data, f)
+
+    return {"job_id": job_id, "favorite": body.favorite}
+
+
+@app.patch("/api/jobs/{job_id}/name")
+async def rename_job(job_id: str, body: RenameRequest):
+    """Met à jour le nom personnalisé d'un job."""
+    job_dir = STORAGE_DIR / job_id
+    if not job_dir.exists():
+        raise HTTPException(status_code=404, detail="Job not found")
+
+    progress_file = job_dir / "progress.json"
+    data: dict = {}
+    if progress_file.exists():
+        with open(progress_file) as f:
+            data = json.load(f)
+
+    data["name"] = body.name.strip()
+    with open(progress_file, "w") as f:
+        json.dump(data, f)
+
+    return {"job_id": job_id, "name": data["name"]}
 
 
 @app.delete("/api/jobs/{job_id}")

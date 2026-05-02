@@ -12,6 +12,9 @@ export interface Job {
   stems_ready: boolean
   size_bytes: number
   size_mb: number
+  name?: string | null
+  favorite?: boolean
+  duration_s?: number | null
 }
 
 export interface Stems {
@@ -47,6 +50,24 @@ export async function listJobs(): Promise<{ jobs: Job[] }> {
   const res = await fetch(`${API_BASE}/api/jobs`)
   if (!res.ok) throw new Error(await res.text())
   return res.json()
+}
+
+export async function renameJob(jobId: string, name: string): Promise<void> {
+  const res = await fetch(`${API_BASE}/api/jobs/${jobId}/name`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name }),
+  })
+  if (!res.ok) throw new Error(await res.text())
+}
+
+export async function setFavorite(jobId: string, favorite: boolean): Promise<void> {
+  const res = await fetch(`${API_BASE}/api/jobs/${jobId}/favorite`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ favorite }),
+  })
+  if (!res.ok) throw new Error(await res.text())
 }
 
 export async function deleteJob(jobId: string): Promise<void> {
