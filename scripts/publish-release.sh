@@ -26,8 +26,11 @@ if ! git tag -l | grep -q "^${VERSION}$"; then
   echo "Tag local $VERSION créé."
 fi
 
+# Pousse le tag vers GitHub
+git push origin "$VERSION"
+echo "Tag $VERSION poussé."
+
 # Crée la release GitHub avec les fichiers du dossier release/
-# --create-refspec crée aussi le tag sur GitHub si absent
 gh release create "$VERSION" \
   "$RELEASE_DIR"/* \
   --title "StemCut $VERSION" \
