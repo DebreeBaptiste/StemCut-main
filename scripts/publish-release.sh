@@ -20,22 +20,20 @@ echo ""
 read -p "Confirmer la publication ? (y/N) " confirm
 [[ "$confirm" =~ ^[Yy]$ ]] || { echo "Annulé."; exit 0; }
 
-# Crée le tag local si il n'existe pas
+COMMIT=$(git rev-parse HEAD)
+
+# Crée la release ET le tag sur GitHub en une seule opération (--target évite de pousser le tag d'abord)
+# Ainsi quand le CI se déclenche, les assets sont déjà présents → build ignoré
+gh release create "$VERSION" \
+  --target "$COMMIT" \
+  --title "StemCut $VERSION" \
+  --generate-notes \
+  "$RELEASE_DIR"/*
+
+# Crée le tag local pour rester en sync
 if ! git tag -l | grep -q "^${VERSION}$"; then
   git tag "$VERSION"
-  echo "Tag local $VERSION créé."
 fi
-
-# Pousse le tag vers GitHub
-git push origin "$VERSION"
-echo "Tag $VERSION poussé."
-
-# Crée la release GitHub avec les fichiers du dossier release/
-gh release create "$VERSION" \
-  "$RELEASE_DIR"/* \
-  --title "StemCut $VERSION" \
-  --generate-notes
 
 echo ""
 echo "Release $VERSION publiée avec succès."
-echo "Le workflow CI détectera les assets existants et sautera le build."
