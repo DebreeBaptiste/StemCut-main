@@ -21,8 +21,7 @@
       "target": ["dmg", "pkg"]
     },
     "pkg": {
-      "scripts": "build/pkg-scripts",
-      "allowCurrentUserSudo": true
+      "scripts": "build/pkg-scripts"
     },
     "win": {
       "icon": "electron/icons/icon.png",
