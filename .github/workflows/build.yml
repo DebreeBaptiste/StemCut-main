@@ -86,11 +86,18 @@ jobs:
         run: npm run build:frontend
 
       # ── Electron build (macOS) ───────────────────────────────────────────
-      - name: Build Electron (macOS)
-        if: runner.os == 'macOS'
+      - name: Build Electron (macOS arm64)
+        if: runner.os == 'macOS' && matrix.arch == 'arm64'
         run: |
           ln -sfn "$(pwd)/.venv" _venv
-          npx electron-builder --mac dmg --arch ${{ matrix.arch }}
+          npx electron-builder --mac dmg --arm64
+          rm -f _venv
+
+      - name: Build Electron (macOS x64)
+        if: runner.os == 'macOS' && matrix.arch == 'x64'
+        run: |
+          ln -sfn "$(pwd)/.venv" _venv
+          npx electron-builder --mac dmg --x64
           rm -f _venv
 
       # ── Electron build (Windows) ─────────────────────────────────────────
