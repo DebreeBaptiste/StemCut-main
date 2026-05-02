@@ -18,13 +18,13 @@ jobs:
             arch: arm64
             python_arch: arm64
             artifact_name: StemCut-arm64.pkg
-            artifact_glob: dist/StemCut-*arm64.pkg
+            artifact_glob: dist/StemCut-*.pkg
 
           - os: macos-latest # x86_64 via Rosetta (macos-13 déprécié)
             arch: x64
             python_arch: x64
             artifact_name: StemCut-x64.pkg
-            artifact_glob: dist/StemCut-*x64.pkg
+            artifact_glob: dist/StemCut-*.pkg
 
           - os: windows-latest
             arch: x64
