@@ -17,14 +17,14 @@ jobs:
           - os: macos-latest # arm64 (Apple Silicon)
             arch: arm64
             python_arch: arm64
-            artifact_name: StemCut-arm64.pkg
-            artifact_glob: dist/StemCut-*.pkg
+            artifact_name: StemCut-arm64.dmg
+            artifact_glob: dist/StemCut-*.dmg
 
           - os: macos-latest # x86_64 via Rosetta (macos-13 déprécié)
             arch: x64
             python_arch: x64
-            artifact_name: StemCut-x64.pkg
-            artifact_glob: dist/StemCut-*.pkg
+            artifact_name: StemCut-x64.dmg
+            artifact_glob: dist/StemCut-*.dmg
 
           - os: windows-latest
             arch: x64
@@ -105,7 +105,7 @@ jobs:
           CSC_IDENTITY_AUTO_DISCOVERY: "false"
         run: |
           ln -sfn "$(pwd)/.venv" _venv
-          npx electron-builder --mac pkg --arm64 --publish never
+          npx electron-builder --mac dmg --arm64 --publish never
           rm -f _venv
 
       - name: Build Electron (macOS x64)
@@ -114,7 +114,7 @@ jobs:
           CSC_IDENTITY_AUTO_DISCOVERY: "false"
         run: |
           ln -sfn "$(pwd)/.venv" _venv
-          npx electron-builder --mac pkg --x64 --publish never
+          npx electron-builder --mac dmg --x64 --publish never
           rm -f _venv
 
       # ── Electron build (Windows) ─────────────────────────────────────────
@@ -125,11 +125,6 @@ jobs:
           New-Item -ItemType Junction -Path _venv -Target "$((Get-Location).Path)\.venv" -Force
           npx electron-builder --win nsis --publish never
           Remove-Item _venv -Force -Recurse -ErrorAction SilentlyContinue
-
-      # ── Debug : lister le contenu de dist/ ──────────────────────────────
-      - name: List dist/
-        if: runner.os == 'macOS'
-        run: ls -la dist/ || echo "dist/ not found"
 
       # ── Upload artifact ──────────────────────────────────────────────────
       - uses: actions/upload-artifact@v4
