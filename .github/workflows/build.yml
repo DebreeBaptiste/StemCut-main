@@ -105,7 +105,7 @@ jobs:
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          New-Item -ItemType Junction -Path _venv -Target .venv -Force
+          New-Item -ItemType Junction -Path _venv -Target "$((Get-Location).Path)\.venv" -Force
           npx electron-builder --win nsis --publish never
           Remove-Item _venv -Force -Recurse -ErrorAction SilentlyContinue
 
