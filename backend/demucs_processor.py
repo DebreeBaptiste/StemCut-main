@@ -45,12 +45,20 @@ def _get_best_device() -> str:
     return "cpu"
 
 
+def _model_is_cached() -> bool:
+    cache_dir = Path.home() / ".cache" / "torch" / "hub" / "checkpoints"
+    return cache_dir.exists() and any(cache_dir.glob("htdemucs*"))
+
+
 def _process_via_api(
     input_path: str,
     output_dir: str,
     progress_callback: Optional[Callable[[int, str], None]] = None,
 ) -> None:
     """Production path: Demucs Python API (no subprocess). Used when frozen."""
+    if progress_callback:
+        progress_callback(11, "Initialisation des modules IA...")
+
     import torch
     from demucs.pretrained import get_model
     from demucs.apply import apply_model
@@ -60,7 +68,10 @@ def _process_via_api(
     print(f"🎛️ Using device: {device} (frozen mode)", flush=True)
 
     if progress_callback:
-        progress_callback(15, f"Chargement du modèle Demucs ({device})...")
+        if not _model_is_cached():
+            progress_callback(13, "Téléchargement du modèle Demucs (~450 Mo, une seule fois)...")
+        else:
+            progress_callback(15, f"Chargement du modèle Demucs ({device})...")
 
     model = get_model('htdemucs')
     model.eval()
