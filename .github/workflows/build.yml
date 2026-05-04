@@ -9,19 +9,9 @@ permissions:
   contents: write
 
 jobs:
-  # ── Build arm64 et x64 en parallèle ───────────────────────────────────────
   build:
-    name: Build (${{ matrix.arch }})
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - runner: macos-14   # Apple Silicon M1 → arm64
-            arch: arm64
-          - runner: macos-13   # Intel → x64
-            arch: x64
-
-    runs-on: ${{ matrix.runner }}
+    name: Build (arm64)
+    runs-on: macos-14
 
     steps:
       - name: Checkout
@@ -42,9 +32,9 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/Library/Caches/pip
-          key: pip-${{ matrix.arch }}-${{ hashFiles('backend/requirements.txt') }}
+          key: pip-arm64-${{ hashFiles('backend/requirements.txt') }}
           restore-keys: |
-            pip-${{ matrix.arch }}-
+            pip-arm64-
 
       - name: Install Node dependencies
         run: npm ci
@@ -71,13 +61,12 @@ jobs:
           [ -d public ] && cp -r public .next/standalone/public || true
 
       - name: Package DMG
-        run: npx electron-builder --mac dmg --${{ matrix.arch }} --publish=never
+        run: npx electron-builder --mac dmg --arm64 --publish=never
 
-      # Chaque job uploade son DMG comme artifact → job release les regroupe
       - name: Upload DMG artifact
         uses: actions/upload-artifact@v4
         with:
-          name: dmg-${{ matrix.arch }}
+          name: dmg-arm64
           path: dist/*.dmg
           retention-days: 7
 

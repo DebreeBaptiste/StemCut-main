@@ -23,14 +23,15 @@ def _setup_ffmpeg() -> str:
     tmp_dir = os.path.join(tempfile.gettempdir(), 'stemcut_ffmpeg')
     os.makedirs(tmp_dir, exist_ok=True)
 
-    # Always recreate symlink — imageio_ffmpeg ne fournit que ffmpeg (pas ffprobe)
-    link = os.path.join(tmp_dir, 'ffmpeg')
-    if os.path.islink(link):
-        os.unlink(link)
-    os.symlink(exe, link)
+    for name in ('ffmpeg', 'ffprobe'):
+        link = os.path.join(tmp_dir, name)
+        if os.path.islink(link) or os.path.exists(link):
+            os.unlink(link)
+        os.symlink(exe, link)
 
     os.environ['PATH'] = tmp_dir + os.pathsep + os.environ.get('PATH', '')
     AudioSegment.converter = os.path.join(tmp_dir, 'ffmpeg')
+    AudioSegment.ffprobe = os.path.join(tmp_dir, 'ffprobe')
     return tmp_dir
 
 
