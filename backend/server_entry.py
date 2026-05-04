@@ -15,6 +15,11 @@ if getattr(sys, 'frozen', False):
     os.environ.setdefault("SSL_CERT_FILE", _ca)
     os.environ.setdefault("REQUESTS_CA_BUNDLE", _ca)
 
+    # Prevent OpenMP/MKL thread spawning deadlocks in frozen PyInstaller binaries
+    for _var in ("OMP_NUM_THREADS", "MKL_NUM_THREADS", "OPENBLAS_NUM_THREADS",
+                 "VECLIB_MAXIMUM_THREADS", "NUMEXPR_NUM_THREADS"):
+        os.environ.setdefault(_var, "1")
+
 # Resolve stable storage directory before importing the app.
 # On macOS this becomes ~/Library/Application Support/StemCut/storage/
 if sys.platform == "darwin":

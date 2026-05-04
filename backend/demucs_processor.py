@@ -11,6 +11,8 @@ import re
 import subprocess
 import shutil
 import sys
+import threading
+import time
 from pathlib import Path
 from typing import Callable, Optional
 
@@ -50,6 +52,14 @@ def _model_is_cached() -> bool:
     return cache_dir.exists() and any(cache_dir.glob("htdemucs*"))
 
 
+def _heartbeat(stop_event: threading.Event, progress_callback: Callable, start_pct: int, msg: str):
+    """Updates progress message every 10s so the UI doesn't look frozen."""
+    elapsed = 0
+    while not stop_event.wait(10):
+        elapsed += 10
+        progress_callback(start_pct, f"{msg} ({elapsed}s)")
+
+
 def _process_via_api(
     input_path: str,
     output_dir: str,
@@ -59,21 +69,35 @@ def _process_via_api(
     if progress_callback:
         progress_callback(11, "Initialisation des modules IA...")
 
+    # Heartbeat during torch import (can take 30-60s in frozen binary)
+    stop_init = threading.Event()
+    if progress_callback:
+        t = threading.Thread(target=_heartbeat, args=(stop_init, progress_callback, 11, "Initialisation des modules IA..."), daemon=True)
+        t.start()
+
     import torch
     from demucs.pretrained import get_model
     from demucs.apply import apply_model
     from demucs.audio import AudioFile, save_audio
 
+    stop_init.set()
+
     device = _get_best_device()
     print(f"🎛️ Using device: {device} (frozen mode)", flush=True)
 
-    if progress_callback:
-        if not _model_is_cached():
-            progress_callback(13, "Téléchargement du modèle Demucs (~450 Mo, une seule fois)...")
-        else:
+    if not _model_is_cached():
+        if progress_callback:
+            progress_callback(13, "Téléchargement du modèle Demucs (~450 Mo)...")
+        stop_dl = threading.Event()
+        if progress_callback:
+            t2 = threading.Thread(target=_heartbeat, args=(stop_dl, progress_callback, 13, "Téléchargement du modèle (~450 Mo)..."), daemon=True)
+            t2.start()
+        model = get_model('htdemucs')
+        stop_dl.set()
+    else:
+        if progress_callback:
             progress_callback(15, f"Chargement du modèle Demucs ({device})...")
-
-    model = get_model('htdemucs')
+        model = get_model('htdemucs')
     model.eval()
     if device != 'cpu':
         model.to(device)
