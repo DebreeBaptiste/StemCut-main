@@ -29,38 +29,57 @@ function waitForPort(port, timeout = 60000) {
 }
 
 function startBackend() {
-  const pythonBin = process.platform === 'win32'
-    ? path.join('.venv', 'Scripts', 'python.exe')
-    : path.join('.venv', 'bin', 'python');
-  const venvPython = IS_DEV
-    ? path.join(ROOT, pythonBin)
-    : path.join(process.resourcesPath, pythonBin);
+  if (IS_DEV) {
+    // Development: use the local venv Python with uvicorn
+    const pythonBin = process.platform === 'win32'
+      ? path.join('.venv', 'Scripts', 'python.exe')
+      : path.join('.venv', 'bin', 'python');
+    const venvPython = path.join(ROOT, pythonBin);
+    const backendCwd = path.join(ROOT, 'backend');
 
-  const backendCwd = IS_DEV
-    ? path.join(ROOT, 'backend')
-    : path.join(process.resourcesPath, 'backend');
-
-  backendProcess = spawn(
-    venvPython,
-    [
-      '-m',
-      'uvicorn',
-      'main:app',
-      '--host',
-      '127.0.0.1',
-      '--port',
-      String(BACKEND_PORT),
-    ],
-    {
-      cwd: backendCwd,
-      env: {
-        ...process.env,
-        HOME: app.getPath('home'),
-        TMPDIR: app.getPath('temp'),
-        PATH: process.env.PATH || '/usr/local/bin:/usr/bin:/bin',
+    backendProcess = spawn(
+      venvPython,
+      [
+        '-m',
+        'uvicorn',
+        'main:app',
+        '--host',
+        '127.0.0.1',
+        '--port',
+        String(BACKEND_PORT),
+      ],
+      {
+        cwd: backendCwd,
+        env: {
+          ...process.env,
+          HOME: app.getPath('home'),
+          TMPDIR: app.getPath('temp'),
+          PATH: process.env.PATH || '/usr/local/bin:/usr/bin:/bin',
+        },
       },
-    },
-  );
+    );
+  } else {
+    // Production: spawn the self-contained binary built by PyInstaller.
+    // The binary lives at Resources/backend-bin/stemcut-backend inside the .app.
+    const backendBin = path.join(
+      process.resourcesPath,
+      'backend-bin',
+      'stemcut-backend',
+    );
+
+    backendProcess = spawn(
+      backendBin,
+      [],
+      {
+        env: {
+          ...process.env,
+          HOME: app.getPath('home'),
+          TMPDIR: app.getPath('temp'),
+          PATH: process.env.PATH || '/usr/local/bin:/usr/bin:/bin',
+        },
+      },
+    );
+  }
 
   backendProcess.stdout?.on('data', (d) =>
     process.stdout.write('[backend] ' + d),

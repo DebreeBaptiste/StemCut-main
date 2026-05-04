@@ -49,8 +49,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-STORAGE_DIR = (Path(__file__).parent.parent / "storage").resolve()
-STORAGE_DIR.mkdir(exist_ok=True)
+STORAGE_DIR = Path(
+    os.environ.get("STEMCUT_STORAGE", str(Path(__file__).parent.parent / "storage"))
+).resolve()
+STORAGE_DIR.mkdir(parents=True, exist_ok=True)
 
 
 # ── Progress helpers ──────────────────────────────────────────────────────────

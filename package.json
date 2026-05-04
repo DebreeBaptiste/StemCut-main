@@ -6,8 +6,10 @@
   "scripts": {
     "electron:dev": "ELECTRON_RUN_AS_NODE= NODE_ENV=development electron .",
     "build:frontend": "cd frontend && npm run build && cp -r .next/static .next/standalone/.next/static && ([ -d public ] && cp -r public .next/standalone/public || true)",
-    "electron:build": "npm run build:frontend && ln -sfn \"$(pwd)/.venv\" _venv && electron-builder; rm -f _venv",
-    "electron:build:x64": "bash scripts/build-x64.sh",
+    "build:backend": "bash scripts/build-backend-mac.sh",
+    "build:backend:x64": "bash scripts/build-backend-mac-x64.sh",
+    "electron:build": "npm run build:frontend && npm run build:backend && electron-builder --mac --arch arm64",
+    "electron:build:x64": "npm run build:frontend && npm run build:backend:x64 && npx electron-builder --mac dmg --arch x64",
     "electron:build:windows": "powershell -ExecutionPolicy Bypass -File scripts/build-windows.ps1",
     "publish": "bash scripts/publish-release.sh"
   },
@@ -38,14 +40,9 @@
     ],
     "extraResources": [
       {
-        "from": "_venv",
-        "to": ".venv",
+        "from": "dist-backend/stemcut-backend",
+        "to": "backend-bin",
         "filter": ["**"]
-      },
-      {
-        "from": "backend",
-        "to": "backend",
-        "filter": ["**/*.py", "requirements.txt"]
       },
       {
         "from": "frontend/.next/standalone",

@@ -1,17 +1,30 @@
 """Wrapper pour Demucs - séparation audio en 4 stems.
 
-Ce module exécute Demucs, déplace les stems générés dans le dossier du job,
-et compresse chaque stem en MP3 pour réduire l'espace disque.
+Ce module exécute Demucs de deux façons selon le contexte :
+
+* **Mode développement** (script Python normal) : lance ``python -m demucs``
+  en sous-processus pour conserver les logs tqdm en temps réel.
+* **Mode bundle** (exécutable PyInstaller) : utilise directement l'API Python
+  de Demucs — ``sys.executable`` n'est pas un interpréteur Python dans un
+  bundle gelé, donc le sous-processus ne fonctionnerait pas.
+
+Dans les deux cas, les stems WAV produits sont ensuite compressés en MP3 et
+placés dans le dossier du job.
 """
 
 import re
-import subprocess
 import shutil
+import subprocess
 import sys
 from pathlib import Path
 from typing import Callable, Optional
 
 from pydub import AudioSegment
+
+
+def _is_frozen() -> bool:
+    """Return True when running inside a PyInstaller bundle."""
+    return getattr(sys, "frozen", False) and hasattr(sys, "_MEIPASS")
 
 
 def _compress_stem_to_mp3(stem_path: Path, progress_callback: Optional[Callable] = None, label: str = "") -> None:
@@ -38,12 +51,96 @@ def _get_best_device() -> str:
     return "cpu"
 
 
-def process_audio(
+# ── Production path: demucs Python API ───────────────────────────────────────
+
+def _process_via_api(
     input_path: str,
     output_dir: str,
     progress_callback: Optional[Callable[[int, str], None]] = None,
-):
-    """Traite un fichier audio avec Demucs et compresse les stems en MP3."""
+) -> None:
+    """Separate stems using the demucs Python API (used in the frozen bundle)."""
+    import os
+    import torch
+    from demucs.pretrained import get_model
+    from demucs.apply import apply_model
+    from demucs.audio import AudioFile, save_audio
+
+    device = _get_best_device()
+    print(f"🎛️ Using device: {device}", flush=True)
+
+    if progress_callback:
+        progress_callback(15, f"Chargement du modèle Demucs ({device})...")
+
+    model = get_model("htdemucs")
+    model.to(device)
+
+    if progress_callback:
+        progress_callback(20, "Lecture du fichier audio...")
+
+    wav = AudioFile(input_path).read(
+        stems=model.sources,
+        samplerate=model.samplerate,
+        channels=2,
+    )
+    ref = wav.mean(0)
+    wav = (wav - ref.mean()) / ref.std()
+
+    if progress_callback:
+        progress_callback(25, "Séparation des stems... (plusieurs minutes)")
+
+    if device == "mps":
+        os.environ["PYTORCH_ENABLE_MPS_FALLBACK"] = "1"
+
+    def _apply(dev: str):
+        with torch.no_grad():
+            return apply_model(
+                model,
+                wav.to(dev)[None],
+                device=dev,
+                shifts=1,
+                split=True,
+                overlap=0.25,
+                progress=False,
+            )[0]
+
+    try:
+        sources = _apply(device)
+    except Exception:
+        if device != "cpu":
+            print("⚠️ GPU failed, falling back to CPU...", flush=True)
+            if progress_callback:
+                progress_callback(25, "Reprise sur CPU...")
+            model.to("cpu")
+            sources = _apply("cpu")
+        else:
+            raise
+
+    sources = sources * ref.std() + ref.mean()
+
+    if progress_callback:
+        progress_callback(82, "Sauvegarde des stems...")
+
+    output_path = Path(output_dir)
+    for i, (stem, source) in enumerate(zip(model.sources, sources)):
+        dst = output_path / f"{stem}.wav"
+        save_audio(source.cpu(), str(dst), samplerate=model.samplerate)
+        if progress_callback:
+            progress_callback(85 + i * 3, f"Compression {stem}...")
+        _compress_stem_to_mp3(dst)
+
+    if progress_callback:
+        progress_callback(98, "Finalisation...")
+    print(f"✅ Stems generated (MP3) in {output_dir}", flush=True)
+
+
+# ── Development path: demucs subprocess ──────────────────────────────────────
+
+def _process_via_subprocess(
+    input_path: str,
+    output_dir: str,
+    progress_callback: Optional[Callable[[int, str], None]] = None,
+) -> None:
+    """Separate stems by spawning ``python -m demucs`` (used in dev mode)."""
     python_executable = sys.executable
     device = _get_best_device()
     print(f"🎛️ Using device: {device}", flush=True)
@@ -62,7 +159,7 @@ def process_audio(
         env = None
         if dev == "mps":
             import os
-            env = __import__("os").environ.copy()
+            env = os.environ.copy()
             env["PYTORCH_ENABLE_MPS_FALLBACK"] = "1"
 
         process = subprocess.Popen(
@@ -128,5 +225,26 @@ def process_audio(
 
     if progress_callback:
         progress_callback(98, "Finalisation...")
-
     print(f"✅ Stems generated (MP3) in {output_dir}", flush=True)
+
+
+# ── Public API ────────────────────────────────────────────────────────────────
+
+def process_audio(
+    input_path: str,
+    output_dir: str,
+    progress_callback: Optional[Callable[[int, str], None]] = None,
+):
+    """Traite un fichier audio avec Demucs et compresse les stems en MP3.
+
+    Dispatche vers l'API Python (bundle) ou le sous-processus (dev) selon le
+    contexte d'exécution.
+    """
+    if _is_frozen():
+        # In a PyInstaller bundle sys.executable is the binary itself, not a
+        # Python interpreter, so spawning `python -m demucs` would fail.
+        # Use the demucs Python API directly instead.
+        _process_via_api(input_path, output_dir, progress_callback)
+    else:
+        # Dev mode: spawn as subprocess to get real-time tqdm progress logs.
+        _process_via_subprocess(input_path, output_dir, progress_callback)
