@@ -1,4 +1,4 @@
-name: Release StemCut
+name: Build macOS DMG
 
 on:
   push:
@@ -9,9 +9,83 @@ permissions:
   contents: write
 
 jobs:
-  release:
-    runs-on: ubuntu-latest
-    if: startsWith(github.ref, 'refs/tags/')
+  build-macos:
+    name: Build (${{ matrix.arch }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-14   # Apple Silicon M1 → arm64
+            arch: arm64
+          - runner: macos-13   # Intel → x64
+            arch: x64
+
+    runs-on: ${{ matrix.runner }}
+
     steps:
-      - name: Tag créé sans build CI
-        run: echo "Release créée via le script local publish-release.sh"
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Setup Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      # Torch + Demucs sont ~3 Go — on cache le répertoire pip pour ne pas
+      # les re-télécharger à chaque build.
+      - name: Cache pip
+        uses: actions/cache@v4
+        with:
+          path: ~/Library/Caches/pip
+          key: pip-${{ matrix.arch }}-${{ hashFiles('backend/requirements.txt') }}
+          restore-keys: |
+            pip-${{ matrix.arch }}-
+
+      - name: Install Node dependencies
+        run: npm ci
+
+      - name: Install Python dependencies + PyInstaller
+        run: |
+          pip install --upgrade pip
+          pip install -r backend/requirements.txt pyinstaller
+
+      - name: Build backend binary (PyInstaller)
+        run: |
+          cd backend
+          pyinstaller stemcut_backend.spec \
+            --distpath "${{ github.workspace }}/dist-backend" \
+            --workpath "${{ github.workspace }}/build-backend" \
+            --noconfirm
+
+      - name: Build frontend (Next.js)
+        run: |
+          cd frontend
+          npm ci
+          npm run build
+          cp -r .next/static .next/standalone/.next/static
+          [ -d public ] && cp -r public .next/standalone/public || true
+
+      - name: Package DMG (electron-builder)
+        run: npx electron-builder --mac dmg --${{ matrix.arch }}
+
+      - name: Upload DMG as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: StemCut-macos-${{ matrix.arch }}
+          path: dist/*.dmg
+          retention-days: 30
+
+      # Attache les DMG à la release GitHub si déclenché par un tag
+      - name: Attach DMG to release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*.dmg
+          draft: true
+          generate_release_notes: true
