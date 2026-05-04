@@ -7,6 +7,14 @@ import os
 import sys
 from pathlib import Path
 
+# In a frozen PyInstaller bundle the system SSL certificates are not available.
+# Point Python's SSL stack to certifi's bundle before any network call is made.
+if getattr(sys, 'frozen', False):
+    import certifi
+    _ca = certifi.where()
+    os.environ.setdefault("SSL_CERT_FILE", _ca)
+    os.environ.setdefault("REQUESTS_CA_BUNDLE", _ca)
+
 # Resolve stable storage directory before importing the app.
 # On macOS this becomes ~/Library/Application Support/StemCut/storage/
 if sys.platform == "darwin":

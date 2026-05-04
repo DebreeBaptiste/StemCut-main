@@ -12,6 +12,7 @@ ytdlp_datas, ytdlp_binaries, ytdlp_hiddenimports = collect_all('yt_dlp')
 
 imageio_ffmpeg_datas = collect_data_files('imageio_ffmpeg')
 soundfile_datas = collect_data_files('soundfile')
+certifi_datas = collect_data_files('certifi')
 
 a = Analysis(
     ['server_entry.py'],
@@ -19,12 +20,13 @@ a = Analysis(
     binaries=torch_binaries + torchaudio_binaries + demucs_binaries + ytdlp_binaries,
     datas=(
         torch_datas + torchaudio_datas + demucs_datas + ytdlp_datas
-        + imageio_ffmpeg_datas + soundfile_datas
+        + imageio_ffmpeg_datas + soundfile_datas + certifi_datas
     ),
     hiddenimports=(
         torch_hiddenimports + torchaudio_hiddenimports
         + demucs_hiddenimports + ytdlp_hiddenimports
         + [
+            'certifi',
             'uvicorn', 'uvicorn.logging', 'uvicorn.loops', 'uvicorn.loops.auto',
             'uvicorn.protocols', 'uvicorn.protocols.http', 'uvicorn.protocols.http.auto',
             'uvicorn.protocols.http.h11_impl', 'uvicorn.protocols.http.httptools_impl',
