@@ -9,7 +9,8 @@ permissions:
   contents: write
 
 jobs:
-  build-macos:
+  # ── Build arm64 et x64 en parallèle ───────────────────────────────────────
+  build:
     name: Build (${{ matrix.arch }})
     strategy:
       fail-fast: false
@@ -37,8 +38,6 @@ jobs:
         with:
           python-version: '3.11'
 
-      # Torch + Demucs sont ~3 Go — on cache le répertoire pip pour ne pas
-      # les re-télécharger à chaque build.
       - name: Cache pip
         uses: actions/cache@v4
         with:
@@ -71,21 +70,38 @@ jobs:
           cp -r .next/static .next/standalone/.next/static
           [ -d public ] && cp -r public .next/standalone/public || true
 
-      - name: Package DMG (electron-builder)
+      - name: Package DMG
         run: npx electron-builder --mac dmg --${{ matrix.arch }} --publish=never
 
-      - name: Upload DMG as artifact
+      # Chaque job uploade son DMG comme artifact → job release les regroupe
+      - name: Upload DMG artifact
         uses: actions/upload-artifact@v4
         with:
-          name: StemCut-macos-${{ matrix.arch }}
+          name: dmg-${{ matrix.arch }}
           path: dist/*.dmg
-          retention-days: 30
+          retention-days: 7
 
-      # Attache les DMG à la release GitHub si déclenché par un tag
-      - name: Attach DMG to release
-        if: startsWith(github.ref, 'refs/tags/')
+  # ── Crée la release GitHub une seule fois avec les deux DMGs ──────────────
+  release:
+    name: Create Release
+    needs: build
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/')
+
+    steps:
+      - name: Download all DMG artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: dmg-*
+          merge-multiple: true
+          path: dmgs/
+
+      - name: List DMGs
+        run: ls -lh dmgs/
+
+      - name: Create draft release
         uses: softprops/action-gh-release@v2
         with:
-          files: dist/*.dmg
+          files: dmgs/*.dmg
           draft: true
           generate_release_notes: true
