@@ -37,6 +37,18 @@ def _setup_ffmpeg() -> str:
 
 _FFMPEG_DIR = _setup_ffmpeg()
 
+import logging
+
+_log_path = STORAGE_DIR / "stemcut.log"
+logging.basicConfig(
+    filename=str(_log_path),
+    level=logging.DEBUG,
+    format="%(asctime)s %(levelname)s %(message)s",
+    force=True,
+)
+log = logging.getLogger("stemcut")
+log.info("Backend started, storage=%s", STORAGE_DIR)
+
 from demucs_processor import process_audio
 from export_mixer import create_mix
 
@@ -130,8 +142,10 @@ def _run_job(
     """Thread de traitement : téléchargement optionnel + Demucs."""
     try:
         file_path = saved_file_path
+        log.info("Job %s started, file=%s youtube=%s", job_id, saved_file_path, youtube_url)
 
         def on_progress(p: int, msg: str = ""):
+            log.debug("Job %s progress %s%% %s", job_id, p, msg)
             _write_progress(job_dir, p, msg)
 
         if youtube_url:
@@ -141,10 +155,13 @@ def _run_job(
         else:
             _write_progress(job_dir, 10, "Démarrage de la séparation...")
 
+        log.info("Job %s calling process_audio", job_id)
         process_audio(str(file_path), str(job_dir), progress_callback=on_progress)
+        log.info("Job %s completed", job_id)
         _write_progress(job_dir, 100, "Terminé !", status="completed")
 
     except Exception as e:
+        log.exception("Job %s failed: %s", job_id, e)
         print(f"❌ Job {job_id} failed: {e}", flush=True)
         _write_progress(job_dir, 0, str(e), status="error")
 

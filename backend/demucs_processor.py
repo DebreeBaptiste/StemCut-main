@@ -7,6 +7,7 @@ directement, car sys.executable est le binaire lui-même et `python -m demucs`
 ne fonctionne pas dans ce contexte.
 """
 
+import os
 import re
 import subprocess
 import shutil
@@ -36,6 +37,8 @@ def _compress_stem_to_mp3(stem_path: Path, progress_callback: Optional[Callable]
 
 
 def _get_best_device() -> str:
+    if os.environ.get("STEMCUT_FORCE_CPU") == "1":
+        return "cpu"
     try:
         import torch
         if torch.cuda.is_available():

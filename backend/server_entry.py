@@ -20,6 +20,12 @@ if getattr(sys, 'frozen', False):
                  "VECLIB_MAXIMUM_THREADS", "NUMEXPR_NUM_THREADS"):
         os.environ.setdefault(_var, "1")
 
+    # Prevent MPS (Apple Silicon GPU) initialization crashes in frozen binary
+    os.environ.setdefault("PYTORCH_ENABLE_MPS_FALLBACK", "1")
+    os.environ.setdefault("PYTORCH_MPS_HIGH_WATERMARK_RATIO", "0.0")
+    # Force CPU — MPS in a frozen PyInstaller binary is unstable
+    os.environ.setdefault("STEMCUT_FORCE_CPU", "1")
+
 # Resolve stable storage directory before importing the app.
 # On macOS this becomes ~/Library/Application Support/StemCut/storage/
 if sys.platform == "darwin":
