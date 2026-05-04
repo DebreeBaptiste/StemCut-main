@@ -1,6 +1,7 @@
 # Dependencies
 node_modules/
 .venv/
+.venv_x64/
 venv/
 __pycache__/
 *.py[cod]
@@ -11,7 +12,9 @@ release/
 .next/
 out/
 build/
+build-backend/
 dist/
+dist-backend/
 
 # Storage (fichiers audio traités localement)
 storage/

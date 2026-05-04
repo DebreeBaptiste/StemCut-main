@@ -29,38 +29,44 @@ function waitForPort(port, timeout = 60000) {
 }
 
 function startBackend() {
-  const pythonBin = process.platform === 'win32'
-    ? path.join('.venv', 'Scripts', 'python.exe')
-    : path.join('.venv', 'bin', 'python');
-  const venvPython = IS_DEV
-    ? path.join(ROOT, pythonBin)
-    : path.join(process.resourcesPath, pythonBin);
+  let cmd, args, cwd, env;
 
-  const backendCwd = IS_DEV
-    ? path.join(ROOT, 'backend')
-    : path.join(process.resourcesPath, 'backend');
+  if (IS_DEV) {
+    const pythonBin = process.platform === 'win32'
+      ? path.join('.venv', 'Scripts', 'python.exe')
+      : path.join('.venv', 'bin', 'python');
+    cmd = path.join(ROOT, pythonBin);
+    args = ['-m', 'uvicorn', 'main:app', '--host', '127.0.0.1', '--port', String(BACKEND_PORT)];
+    cwd = path.join(ROOT, 'backend');
+    env = {
+      ...process.env,
+      HOME: app.getPath('home'),
+      TMPDIR: app.getPath('temp'),
+      PATH: process.env.PATH || '/usr/local/bin:/usr/bin:/bin',
+    };
+  } else if (process.platform === 'win32') {
+    // Windows production: Python venv bundled by electron-builder
+    cmd = path.join(process.resourcesPath, '.venv', 'Scripts', 'python.exe');
+    args = ['-m', 'uvicorn', 'main:app', '--host', '127.0.0.1', '--port', String(BACKEND_PORT)];
+    cwd = path.join(process.resourcesPath, 'backend');
+    env = { ...process.env };
+  } else {
+    // macOS production: self-contained PyInstaller binary
+    const binDir = path.join(process.resourcesPath, 'backend-bin', 'stemcut-backend');
+    cmd = path.join(binDir, 'stemcut-backend');
+    args = [];
+    cwd = binDir;
+    const storageDir = path.join(app.getPath('appData'), 'StemCut', 'storage');
+    env = {
+      ...process.env,
+      HOME: app.getPath('home'),
+      TMPDIR: app.getPath('temp'),
+      PATH: process.env.PATH || '/usr/local/bin:/usr/bin:/bin',
+      STEMCUT_STORAGE: storageDir,
+    };
+  }
 
-  backendProcess = spawn(
-    venvPython,
-    [
-      '-m',
-      'uvicorn',
-      'main:app',
-      '--host',
-      '127.0.0.1',
-      '--port',
-      String(BACKEND_PORT),
-    ],
-    {
-      cwd: backendCwd,
-      env: {
-        ...process.env,
-        HOME: app.getPath('home'),
-        TMPDIR: app.getPath('temp'),
-        PATH: process.env.PATH || '/usr/local/bin:/usr/bin:/bin',
-      },
-    },
-  );
+  backendProcess = spawn(cmd, args, { cwd, env });
 
   backendProcess.stdout?.on('data', (d) =>
     process.stdout.write('[backend] ' + d),

@@ -6,7 +6,9 @@
   "scripts": {
     "electron:dev": "ELECTRON_RUN_AS_NODE= NODE_ENV=development electron .",
     "build:frontend": "cd frontend && npm run build && cp -r .next/static .next/standalone/.next/static && ([ -d public ] && cp -r public .next/standalone/public || true)",
-    "electron:build": "npm run build:frontend && ln -sfn \"$(pwd)/.venv\" _venv && electron-builder; rm -f _venv",
+    "build:backend": "bash scripts/build-backend-mac.sh",
+    "build:backend:x64": "bash scripts/build-backend-mac-x64.sh",
+    "electron:build": "bash scripts/build-backend-mac.sh && npm run build:frontend && electron-builder --mac --arm64",
     "electron:build:x64": "bash scripts/build-x64.sh",
     "electron:build:windows": "powershell -ExecutionPolicy Bypass -File scripts/build-windows.ps1",
     "publish": "bash scripts/publish-release.sh"
@@ -18,40 +20,51 @@
       "output": "dist"
     },
     "afterSign": "scripts/afterSign.js",
-    "mac": {
-      "icon": "electron/icons/icon.icns",
-      "category": "public.app-category.music",
-      "target": ["dmg"],
-      "identity": null
-    },
-    "win": {
-      "icon": "electron/icons/icon.png",
-      "target": ["nsis"]
-    },
-    "nsis": {
-      "runAfterFinish": true
-    },
     "files": [
       "electron/main.js",
       "electron/preload.js",
       "electron/icons/**"
     ],
-    "extraResources": [
-      {
-        "from": "_venv",
-        "to": ".venv",
-        "filter": ["**"]
-      },
-      {
-        "from": "backend",
-        "to": "backend",
-        "filter": ["**/*.py", "requirements.txt"]
-      },
-      {
-        "from": "frontend/.next/standalone",
-        "to": "frontend-standalone"
-      }
-    ]
+    "mac": {
+      "icon": "electron/icons/icon.icns",
+      "category": "public.app-category.music",
+      "target": ["dmg"],
+      "identity": null,
+      "extraResources": [
+        {
+          "from": "dist-backend/stemcut-backend",
+          "to": "backend-bin/stemcut-backend",
+          "filter": ["**"]
+        },
+        {
+          "from": "frontend/.next/standalone",
+          "to": "frontend-standalone"
+        }
+      ]
+    },
+    "win": {
+      "icon": "electron/icons/icon.png",
+      "target": ["nsis"],
+      "extraResources": [
+        {
+          "from": "_venv",
+          "to": ".venv",
+          "filter": ["**"]
+        },
+        {
+          "from": "backend",
+          "to": "backend",
+          "filter": ["**/*.py", "requirements.txt"]
+        },
+        {
+          "from": "frontend/.next/standalone",
+          "to": "frontend-standalone"
+        }
+      ]
+    },
+    "nsis": {
+      "runAfterFinish": true
+    }
   },
   "devDependencies": {
     "electron": "^41.4.0",
