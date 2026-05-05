@@ -94,7 +94,12 @@ function startBackend(storageDir) {
       const detail = stderrLines.join('').trim() || 'Aucun détail disponible.';
       reject(new Error(`Le backend s'est arrêté (code ${code}).\n\n${detail}`));
     };
+    const onError = (err) => {
+      backendProcess.removeListener('exit', onExit);
+      reject(new Error(`Impossible de démarrer le backend.\n\n${err.message}\n\nFichier attendu : ${cmd}`));
+    };
     backendProcess.once('exit', onExit);
+    backendProcess.once('error', onError);
 
     const check = () => {
       if (Date.now() - start > TIMEOUT) {
@@ -105,6 +110,7 @@ function startBackend(storageDir) {
       http
         .get(`http://localhost:${BACKEND_PORT}`, () => {
           backendProcess.removeListener('exit', onExit);
+          backendProcess.removeListener('error', onError);
           resolve();
         })
         .on('error', () => setTimeout(check, 500));
