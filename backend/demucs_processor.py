@@ -12,6 +12,7 @@ import re
 import subprocess
 import shutil
 import sys
+import tempfile
 import threading
 import time
 from pathlib import Path
@@ -55,6 +56,35 @@ def _model_is_cached() -> bool:
     return cache_dir.exists() and any(cache_dir.glob("htdemucs*"))
 
 
+def _load_audio_no_ffprobe(input_path: str, samplerate: int, channels: int) -> 'torch.Tensor':
+    """Load audio using ffmpeg→WAV→soundfile, without needing ffprobe.
+
+    Demucs's AudioFile calls ffprobe internally; imageio_ffmpeg only ships
+    ffmpeg (not ffprobe), so we bypass AudioFile entirely.
+    """
+    import torch
+    import soundfile as sf
+    from pydub import AudioSegment
+
+    ffmpeg_exe = getattr(AudioSegment, 'converter', 'ffmpeg')
+
+    with tempfile.NamedTemporaryFile(suffix='.wav', delete=False) as tmp:
+        tmp_path = tmp.name
+
+    try:
+        subprocess.run(
+            [ffmpeg_exe, '-y', '-i', input_path,
+             '-ar', str(samplerate), '-ac', str(channels),
+             '-f', 'wav', tmp_path],
+            check=True, capture_output=True,
+        )
+        data, _ = sf.read(tmp_path, dtype='float32', always_2d=True)
+        # data: (samples, channels) → (channels, samples)
+        return torch.from_numpy(data.T.copy())
+    finally:
+        Path(tmp_path).unlink(missing_ok=True)
+
+
 def _heartbeat(stop_event: threading.Event, progress_callback: Callable, start_pct: int, msg: str):
     """Updates progress message every 10s so the UI doesn't look frozen."""
     elapsed = 0
@@ -81,7 +111,7 @@ def _process_via_api(
     import torch
     from demucs.pretrained import get_model
     from demucs.apply import apply_model
-    from demucs.audio import AudioFile, save_audio
+    from demucs.audio import save_audio
 
     stop_init.set()
 
@@ -108,11 +138,7 @@ def _process_via_api(
     if progress_callback:
         progress_callback(20, "Chargement audio...")
 
-    wav = AudioFile(input_path).read(
-        streams=0,
-        samplerate=model.samplerate,
-        channels=model.audio_channels,
-    )
+    wav = _load_audio_no_ffprobe(input_path, model.samplerate, model.audio_channels)
     wav = wav.unsqueeze(0)  # add batch dimension: (1, channels, samples)
     if device != 'cpu':
         wav = wav.to(device)
