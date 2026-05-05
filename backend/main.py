@@ -27,7 +27,12 @@ def _setup_ffmpeg() -> str:
         link = os.path.join(tmp_dir, name)
         if os.path.islink(link) or os.path.exists(link):
             os.unlink(link)
-        os.symlink(exe, link)
+        try:
+            os.symlink(exe, link)
+        except (OSError, NotImplementedError):
+            # Windows without symlink privileges: copy instead
+            import shutil as _shutil
+            _shutil.copy2(exe, link)
 
     os.environ['PATH'] = tmp_dir + os.pathsep + os.environ.get('PATH', '')
     AudioSegment.converter = os.path.join(tmp_dir, 'ffmpeg')
@@ -36,18 +41,6 @@ def _setup_ffmpeg() -> str:
 
 
 _FFMPEG_DIR = _setup_ffmpeg()
-
-import logging
-
-_log_path = STORAGE_DIR / "stemcut.log"
-logging.basicConfig(
-    filename=str(_log_path),
-    level=logging.DEBUG,
-    format="%(asctime)s %(levelname)s %(message)s",
-    force=True,
-)
-log = logging.getLogger("stemcut")
-log.info("Backend started, storage=%s", STORAGE_DIR)
 
 from demucs_processor import process_audio
 from export_mixer import create_mix
@@ -66,6 +59,18 @@ STORAGE_DIR = Path(
     os.environ.get("STEMCUT_STORAGE", str((Path(__file__).parent.parent / "storage").resolve()))
 )
 STORAGE_DIR.mkdir(parents=True, exist_ok=True)
+
+import logging
+
+_log_path = STORAGE_DIR / "stemcut.log"
+logging.basicConfig(
+    filename=str(_log_path),
+    level=logging.DEBUG,
+    format="%(asctime)s %(levelname)s %(message)s",
+    force=True,
+)
+log = logging.getLogger("stemcut")
+log.info("Backend started, storage=%s", STORAGE_DIR)
 
 
 # ── Progress helpers ──────────────────────────────────────────────────────────
