@@ -119,6 +119,22 @@ function startBackend(storageDir) {
   });
 }
 
+function waitForPort(port, timeout = 30_000) {
+  return new Promise((resolve, reject) => {
+    const start = Date.now();
+    const check = () => {
+      if (Date.now() - start > timeout) {
+        reject(new Error(`Le frontend n'a pas répondu dans le délai imparti (30s).`));
+        return;
+      }
+      http
+        .get(`http://localhost:${port}`, () => resolve())
+        .on('error', () => setTimeout(check, 500));
+    };
+    check();
+  });
+}
+
 function startFrontend() {
   if (IS_DEV) {
     const npm = process.platform === 'win32' ? 'npm.cmd' : 'npm';
