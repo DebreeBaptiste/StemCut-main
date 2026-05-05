@@ -1,5 +1,6 @@
-const { app, BrowserWindow, utilityProcess } = require('electron');
+const { app, BrowserWindow, utilityProcess, ipcMain, dialog, shell } = require('electron');
 const path = require('path');
+const fs = require('fs');
 const { spawn } = require('child_process');
 const http = require('http');
 
@@ -11,6 +12,31 @@ const IS_DEV = !app.isPackaged;
 let mainWindow;
 let backendProcess;
 let frontendProcess;
+
+// ── Config ────────────────────────────────────────────────────────────────────
+
+function getConfigPath() {
+  return path.join(app.getPath('userData'), 'stemcut-config.json');
+}
+
+function loadConfig() {
+  try {
+    return JSON.parse(fs.readFileSync(getConfigPath(), 'utf8'));
+  } catch {
+    return {};
+  }
+}
+
+function saveConfig(data) {
+  fs.writeFileSync(getConfigPath(), JSON.stringify(data, null, 2), 'utf8');
+}
+
+function getStorageDir() {
+  const config = loadConfig();
+  return config.storageDir || path.join(app.getPath('appData'), 'StemCut', 'storage');
+}
+
+// ── Backend ───────────────────────────────────────────────────────────────────
 
 function waitForPort(port, timeout = 60000) {
   return new Promise((resolve, reject) => {
@@ -28,7 +54,8 @@ function waitForPort(port, timeout = 60000) {
   });
 }
 
-function startBackend() {
+function startBackend(storageDir) {
+  const storage = storageDir || getStorageDir();
   let cmd, args, cwd, env;
 
   if (IS_DEV) {
@@ -43,31 +70,28 @@ function startBackend() {
       HOME: app.getPath('home'),
       TMPDIR: app.getPath('temp'),
       PATH: process.env.PATH || '/usr/local/bin:/usr/bin:/bin',
+      STEMCUT_STORAGE: storage,
     };
   } else if (process.platform === 'win32') {
-    // Windows production: Python venv bundled by electron-builder
     cmd = path.join(process.resourcesPath, '.venv', 'Scripts', 'python.exe');
     args = ['-m', 'uvicorn', 'main:app', '--host', '127.0.0.1', '--port', String(BACKEND_PORT)];
     cwd = path.join(process.resourcesPath, 'backend');
-    env = { ...process.env };
+    env = { ...process.env, STEMCUT_STORAGE: storage };
   } else {
-    // macOS production: self-contained PyInstaller binary
     const binDir = path.join(process.resourcesPath, 'backend-bin', 'stemcut-backend');
     cmd = path.join(binDir, 'stemcut-backend');
     args = [];
     cwd = binDir;
-    const storageDir = path.join(app.getPath('appData'), 'StemCut', 'storage');
     env = {
       ...process.env,
       HOME: app.getPath('home'),
       TMPDIR: app.getPath('temp'),
       PATH: process.env.PATH || '/usr/local/bin:/usr/bin:/bin',
-      STEMCUT_STORAGE: storageDir,
+      STEMCUT_STORAGE: storage,
     };
   }
 
   backendProcess = spawn(cmd, args, { cwd, env });
-
   backendProcess.stdout?.on('data', (d) =>
     process.stdout.write('[backend] ' + d),
   );
@@ -156,6 +180,37 @@ function killAll() {
   if (backendProcess) backendProcess.kill();
   if (frontendProcess) frontendProcess.kill();
 }
+
+// ── IPC handlers ──────────────────────────────────────────────────────────────
+
+ipcMain.handle('get-storage-dir', () => getStorageDir());
+
+ipcMain.handle('choose-storage-dir', async () => {
+  const result = await dialog.showOpenDialog(mainWindow, {
+    properties: ['openDirectory', 'createDirectory'],
+    title: 'Choisir le répertoire de stockage',
+    defaultPath: getStorageDir(),
+  });
+  if (result.canceled || !result.filePaths.length) return null;
+
+  const newDir = result.filePaths[0];
+  const config = loadConfig();
+  config.storageDir = newDir;
+  saveConfig(config);
+
+  // Restart backend with new storage dir
+  if (backendProcess) {
+    backendProcess.kill();
+    await new Promise((resolve) => setTimeout(resolve, 800));
+  }
+  await startBackend(newDir);
+
+  return newDir;
+});
+
+ipcMain.handle('open-path', (_event, filePath) => shell.openPath(filePath));
+
+// ── App lifecycle ─────────────────────────────────────────────────────────────
 
 app.setName('StemCut');
 

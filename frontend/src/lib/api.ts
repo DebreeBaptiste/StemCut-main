@@ -105,6 +105,12 @@ export async function exportMix(
   return res.blob();
 }
 
+export async function exportDawPack(jobId: string): Promise<Blob> {
+  const res = await fetch(`${API_BASE}/api/export/daw/${jobId}`);
+  if (!res.ok) throw new Error(await res.text());
+  return res.blob();
+}
+
 export function stemStreamUrl(jobId: string, stem: string): string {
   return `${API_BASE}/api/stream/${jobId}/${stem}.mp3`;
 }

@@ -1,2 +1,9 @@
-// Injecté avant le rendu de la page — expose le flag Electron au renderer
+const { ipcRenderer, shell } = require('electron');
+
 window.__ELECTRON__ = true;
+
+window.electronAPI = {
+  getStorageDir: () => ipcRenderer.invoke('get-storage-dir'),
+  chooseStorageDir: () => ipcRenderer.invoke('choose-storage-dir'),
+  openPath: (p) => ipcRenderer.invoke('open-path', p),
+};

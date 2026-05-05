@@ -44,6 +44,7 @@ _FFMPEG_DIR = _setup_ffmpeg()
 
 from demucs_processor import process_audio
 from export_mixer import create_mix
+from daw_exporter import create_daw_export
 
 app = FastAPI(title="StemCut API")
 
@@ -299,6 +300,27 @@ async def export_mix(request: ExportRequest):
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Export failed: {str(e)}")
+
+
+@app.get("/api/export/daw/{job_id}")
+async def export_daw_pack(job_id: str):
+    """Génère un pack ZIP prêt à importer dans un DAW."""
+    job_dir = STORAGE_DIR / job_id
+
+    if not job_dir.exists():
+        raise HTTPException(status_code=404, detail="Job not found")
+
+    try:
+        output_path = create_daw_export(str(job_dir), job_id)
+        return FileResponse(
+            output_path,
+            media_type="application/zip",
+            filename=f"stemcut_daw_{job_id[:8]}.zip",
+        )
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"DAW export failed: {str(e)}")
 
 
 @app.get("/api/bpm/{job_id}")

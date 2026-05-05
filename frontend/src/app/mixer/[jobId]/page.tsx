@@ -2,9 +2,23 @@
 
 import { useEffect, useRef, useState, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { ArrowLeft, Play, Pause, Download, Repeat, Timer } from "lucide-react";
+import {
+  ArrowLeft,
+  Play,
+  Pause,
+  Download,
+  Repeat,
+  Timer,
+  FolderArchive,
+} from "lucide-react";
 import WaveTrack, { type WaveTrackHandle } from "@/components/WaveTrack";
-import { getStems, exportMix, getBpm, type Stems } from "@/lib/api";
+import {
+  getStems,
+  exportMix,
+  exportDawPack,
+  getBpm,
+  type Stems,
+} from "@/lib/api";
 import { useMetronome } from "@/hooks/useMetronome";
 
 const STEMS = [
@@ -56,6 +70,7 @@ export default function MixerPage() {
     other: 0.7,
   });
   const [exporting, setExporting] = useState(false);
+  const [exportingDaw, setExportingDaw] = useState(false);
 
   // BPM state
   const [bpm, setBpm] = useState<number | null>(null);
@@ -375,6 +390,21 @@ export default function MixerPage() {
     }
   }, [jobId, muted]);
 
+  const handleDawExport = useCallback(async () => {
+    setExportingDaw(true);
+    try {
+      const blob = await exportDawPack(jobId);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `stemcut_daw_${jobId.slice(0, 8)}.zip`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } finally {
+      setExportingDaw(false);
+    }
+  }, [jobId]);
+
   if (loadError) {
     return (
       <div
@@ -443,6 +473,15 @@ export default function MixerPage() {
               ? "Les pistes mutées seront silencieuses dans l'export"
               : "Chargement des waveforms..."}
           </p>
+          <button
+            onClick={handleDawExport}
+            disabled={exportingDaw || !allReady}
+            className="no-drag flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold text-white disabled:opacity-40 transition-opacity"
+            style={{ background: "#1f2937", border: "1px solid #374151" }}
+          >
+            <FolderArchive size={14} />
+            {exportingDaw ? "Pack DAW..." : "Exporter DAW (ZIP)"}
+          </button>
           <button
             onClick={handleExport}
             disabled={exporting || !allReady}
