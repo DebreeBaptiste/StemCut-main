@@ -23,20 +23,23 @@ def _setup_ffmpeg() -> str:
     tmp_dir = os.path.join(tempfile.gettempdir(), 'stemcut_ffmpeg')
     os.makedirs(tmp_dir, exist_ok=True)
 
+    _is_win = os.name == 'nt'
     for name in ('ffmpeg', 'ffprobe'):
-        link = os.path.join(tmp_dir, name)
+        dest_name = (name + '.exe') if _is_win else name
+        link = os.path.join(tmp_dir, dest_name)
         if os.path.islink(link) or os.path.exists(link):
             os.unlink(link)
         try:
             os.symlink(exe, link)
         except (OSError, NotImplementedError):
-            # Windows without symlink privileges: copy instead
             import shutil as _shutil
             _shutil.copy2(exe, link)
 
     os.environ['PATH'] = tmp_dir + os.pathsep + os.environ.get('PATH', '')
-    AudioSegment.converter = os.path.join(tmp_dir, 'ffmpeg')
-    AudioSegment.ffprobe = os.path.join(tmp_dir, 'ffprobe')
+    _ffmpeg_bin = os.path.join(tmp_dir, 'ffmpeg.exe' if _is_win else 'ffmpeg')
+    _ffprobe_bin = os.path.join(tmp_dir, 'ffprobe.exe' if _is_win else 'ffprobe')
+    AudioSegment.converter = _ffmpeg_bin
+    AudioSegment.ffprobe = _ffprobe_bin
     return tmp_dir
 
 
@@ -129,7 +132,7 @@ def _download_youtube(youtube_url: str, job_dir: Path, progress_cb=None) -> Path
 
     mp3_path = job_dir / "original.mp3"
     if downloaded.suffix.lower() != ".mp3":
-        ffmpeg_exe = os.path.join(_FFMPEG_DIR, 'ffmpeg')
+        ffmpeg_exe = os.path.join(_FFMPEG_DIR, 'ffmpeg.exe' if os.name == 'nt' else 'ffmpeg')
         subprocess.run(
             [ffmpeg_exe, '-y', '-i', str(downloaded), '-vn', '-ab', '192k', '-ar', '44100', str(mp3_path)],
             check=True, capture_output=True,
