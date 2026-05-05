@@ -53,18 +53,10 @@
       ],
       "extraResources": [
         {
-          "from": "_venv",
-          "to": ".venv",
+          "from": "dist-backend/stemcut-backend",
+          "to": "backend-bin/stemcut-backend",
           "filter": [
             "**"
-          ]
-        },
-        {
-          "from": "backend",
-          "to": "backend",
-          "filter": [
-            "**/*.py",
-            "requirements.txt"
           ]
         },
         {

@@ -38,22 +38,6 @@ function getStorageDir() {
 
 // ── Backend ───────────────────────────────────────────────────────────────────
 
-function waitForPort(port, timeout = 60000) {
-  return new Promise((resolve, reject) => {
-    const start = Date.now();
-    const check = () => {
-      http
-        .get(`http://localhost:${port}`, () => resolve())
-        .on('error', () => {
-          if (Date.now() - start > timeout)
-            reject(new Error(`Port ${port} timeout`));
-          else setTimeout(check, 500);
-        });
-    };
-    check();
-  });
-}
-
 function startBackend(storageDir) {
   const storage = storageDir || getStorageDir();
   let cmd, args, cwd, env;
@@ -73,9 +57,10 @@ function startBackend(storageDir) {
       STEMCUT_STORAGE: storage,
     };
   } else if (process.platform === 'win32') {
-    cmd = path.join(process.resourcesPath, '.venv', 'Scripts', 'python.exe');
-    args = ['-m', 'uvicorn', 'main:app', '--host', '127.0.0.1', '--port', String(BACKEND_PORT)];
-    cwd = path.join(process.resourcesPath, 'backend');
+    const binDir = path.join(process.resourcesPath, 'backend-bin', 'stemcut-backend');
+    cmd = path.join(binDir, 'stemcut-backend.exe');
+    args = [];
+    cwd = binDir;
     env = { ...process.env, STEMCUT_STORAGE: storage };
   } else {
     const binDir = path.join(process.resourcesPath, 'backend-bin', 'stemcut-backend');
@@ -92,13 +77,40 @@ function startBackend(storageDir) {
   }
 
   backendProcess = spawn(cmd, args, { cwd, env });
-  backendProcess.stdout?.on('data', (d) =>
-    process.stdout.write('[backend] ' + d),
-  );
-  backendProcess.stderr.on('data', (d) =>
-    process.stdout.write('[backend] ' + d),
-  );
-  return waitForPort(BACKEND_PORT);
+
+  const stderrLines = [];
+  backendProcess.stdout?.on('data', (d) => process.stdout.write('[backend] ' + d));
+  backendProcess.stderr.on('data', (d) => {
+    process.stdout.write('[backend] ' + d);
+    stderrLines.push(d.toString());
+    if (stderrLines.length > 30) stderrLines.shift();
+  });
+
+  return new Promise((resolve, reject) => {
+    const start = Date.now();
+    const TIMEOUT = 60_000;
+
+    const onExit = (code) => {
+      const detail = stderrLines.join('').trim() || 'Aucun détail disponible.';
+      reject(new Error(`Le backend s'est arrêté (code ${code}).\n\n${detail}`));
+    };
+    backendProcess.once('exit', onExit);
+
+    const check = () => {
+      if (Date.now() - start > TIMEOUT) {
+        backendProcess.removeListener('exit', onExit);
+        reject(new Error('Le backend n\'a pas répondu dans le délai imparti (60s).'));
+        return;
+      }
+      http
+        .get(`http://localhost:${BACKEND_PORT}`, () => {
+          backendProcess.removeListener('exit', onExit);
+          resolve();
+        })
+        .on('error', () => setTimeout(check, 500));
+    };
+    check();
+  });
 }
 
 function startFrontend() {
@@ -218,7 +230,14 @@ app.whenReady().then(() => {
   if (process.platform === 'darwin') {
     app.dock.setIcon(path.join(__dirname, 'icons', 'icon.png'));
   }
-  createWindow();
+  createWindow().catch((err) => {
+    const logPath = path.join(getStorageDir(), 'stemcut.log');
+    dialog.showErrorBox(
+      'StemCut — Erreur au démarrage',
+      `L'application n'a pas pu démarrer.\n\n${err.message}\n\nJournal : ${logPath}`,
+    );
+    app.quit();
+  });
 });
 
 app.on('window-all-closed', () => {

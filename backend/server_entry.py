@@ -27,9 +27,12 @@ if getattr(sys, 'frozen', False):
     os.environ.setdefault("STEMCUT_FORCE_CPU", "1")
 
 # Resolve stable storage directory before importing the app.
-# On macOS this becomes ~/Library/Application Support/StemCut/storage/
+# Electron overrides this via STEMCUT_STORAGE; this fallback is for edge cases.
 if sys.platform == "darwin":
     _storage = Path.home() / "Library" / "Application Support" / "StemCut" / "storage"
+elif sys.platform == "win32":
+    _appdata = Path(os.environ.get("APPDATA", "")) or Path.home()
+    _storage = _appdata / "StemCut" / "storage"
 else:
     _storage = Path.home() / ".stemcut" / "storage"
 
