@@ -115,6 +115,10 @@ def _process_via_api(
 
     stop_init.set()
 
+    # Restore multi-threaded inference now that init is done
+    # (OMP_NUM_THREADS=1 was set only to prevent init deadlocks)
+    torch.set_num_threads(max(1, (os.cpu_count() or 2) - 1))
+
     device = _get_best_device()
     print(f"🎛️ Using device: {device} (frozen mode)", flush=True)
 
@@ -146,10 +150,18 @@ def _process_via_api(
     if progress_callback:
         progress_callback(25, "Séparation des stems...")
 
-    env = None
     if device == 'mps':
-        import os as _os
-        _os.environ['PYTORCH_ENABLE_MPS_FALLBACK'] = '1'
+        os.environ['PYTORCH_ENABLE_MPS_FALLBACK'] = '1'
+
+    stop_infer = threading.Event()
+    if progress_callback:
+        _t0 = time.time()
+        def _infer_heartbeat():
+            while not stop_infer.wait(8):
+                elapsed = int(time.time() - _t0)
+                pct = min(26 + elapsed // 6, 79)
+                progress_callback(pct, f"Séparation en cours... ({elapsed}s)")
+        threading.Thread(target=_infer_heartbeat, daemon=True).start()
 
     try:
         with torch.no_grad():
@@ -165,6 +177,8 @@ def _process_via_api(
                 sources = apply_model(model, wav, progress=False)
         else:
             raise
+    finally:
+        stop_infer.set()
 
     sources = sources[0]  # remove batch dim: (n_sources, channels, samples)
 
