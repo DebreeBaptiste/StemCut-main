@@ -20,6 +20,10 @@ if ! "$VENV/bin/python" -c "import PyInstaller" 2>/dev/null; then
   "$VENV/bin/pip" install pyinstaller
 fi
 
+# Ensure requirements are up to date (librosa may have been added after venv creation)
+echo "📦 Syncing requirements..."
+"$VENV/bin/pip" install -q -r "$REPO/backend/requirements.txt"
+
 echo ""
 echo "🔨 Running PyInstaller..."
 cd "$REPO/backend"

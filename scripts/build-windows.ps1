@@ -22,6 +22,9 @@ if (-not (Test-Path $VENV)) {
     Write-Host "venv pret"
 } else {
     Write-Host "venv deja present (supprimer .venv pour forcer la mise a jour)"
+    # Sync requirements au cas où de nouvelles dépendances ont été ajoutées
+    Write-Host "📦 Sync requirements..."
+    & "$VENV\Scripts\pip" install -q -r "$REPO\backend\requirements.txt"
 }
 
 # 2. Build frontend Next.js
@@ -38,9 +41,18 @@ if (Test-Path "public") {
 Write-Host ""
 Write-Host "Packaging Electron..."
 Set-Location $REPO
+npm ci
+
+$env:CSC_IDENTITY_AUTO_DISCOVERY = "false"
 New-Item -ItemType Junction -Path "_venv" -Target $VENV -Force | Out-Null
 npx electron-builder --win nsis --publish never
 Remove-Item "_venv" -Force -Recurse -ErrorAction SilentlyContinue
 
-Write-Host ""
-Write-Host "Installer pret : dist\StemCut*.exe"
+$installer = Get-ChildItem -Path "$REPO\dist" -Filter "StemCut*.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
+if ($installer) {
+    Write-Host ""
+    Write-Host "Installer pret : $($installer.FullName)"
+} else {
+    Write-Host ""
+    Write-Error "Build echoue : aucun .exe trouve dans dist\"
+}

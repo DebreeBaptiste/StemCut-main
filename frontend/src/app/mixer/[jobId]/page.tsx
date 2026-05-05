@@ -1,24 +1,25 @@
-'use client';
+"use client";
 
-import { useEffect, useRef, useState, useCallback } from 'react';
-import { useParams, useRouter } from 'next/navigation';
-import { ArrowLeft, Play, Pause, Download, Repeat } from 'lucide-react';
-import WaveTrack, { type WaveTrackHandle } from '@/components/WaveTrack';
-import { getStems, exportMix, type Stems } from '@/lib/api';
+import { useEffect, useRef, useState, useCallback } from "react";
+import { useParams, useRouter } from "next/navigation";
+import { ArrowLeft, Play, Pause, Download, Repeat, Timer } from "lucide-react";
+import WaveTrack, { type WaveTrackHandle } from "@/components/WaveTrack";
+import { getStems, exportMix, getBpm, type Stems } from "@/lib/api";
+import { useMetronome } from "@/hooks/useMetronome";
 
 const STEMS = [
-  { key: 'vocals', label: 'Chant', color: '#f97316' },
-  { key: 'drums', label: 'Batterie', color: '#3b82f6' },
-  { key: 'bass', label: 'Basse', color: '#22c55e' },
-  { key: 'other', label: 'Autre', color: '#8b5cf6' },
+  { key: "vocals", label: "Chant", color: "#f97316" },
+  { key: "drums", label: "Batterie", color: "#3b82f6" },
+  { key: "bass", label: "Basse", color: "#22c55e" },
+  { key: "other", label: "Autre", color: "#8b5cf6" },
 ] as const;
 
-type StemKey = (typeof STEMS)[number]['key'];
+type StemKey = (typeof STEMS)[number]["key"];
 
 function formatTime(sec: number): string {
   const m = Math.floor(sec / 60);
   const s = Math.floor(sec % 60);
-  return `${m}:${s.toString().padStart(2, '0')}`;
+  return `${m}:${s.toString().padStart(2, "0")}`;
 }
 
 export default function MixerPage() {
@@ -26,7 +27,7 @@ export default function MixerPage() {
   const router = useRouter();
 
   const [stems, setStems] = useState<Stems | null>(null);
-  const [loadError, setLoadError] = useState('');
+  const [loadError, setLoadError] = useState("");
 
   const waveRefs = useRef<Partial<Record<StemKey, WaveTrackHandle>>>({});
   const readyCount = useRef(0);
@@ -55,6 +56,12 @@ export default function MixerPage() {
     other: 0.7,
   });
   const [exporting, setExporting] = useState(false);
+
+  // BPM state
+  const [bpm, setBpm] = useState<number | null>(null);
+  const [firstBeat, setFirstBeat] = useState(0);
+  const [bpmLoading, setBpmLoading] = useState(false);
+  const currentTimeRef = useRef(0);
 
   // Loop state
   const [loopMode, setLoopMode] = useState(false);
@@ -89,9 +96,26 @@ export default function MixerPage() {
     getStems(jobId)
       .then(({ stems }) => setStems(stems))
       .catch(() =>
-        setLoadError('Impossible de charger les stems. Job introuvable.'),
+        setLoadError("Impossible de charger les stems. Job introuvable."),
       );
   }, [jobId]);
+
+  // Fetch BPM once stems are loaded
+  useEffect(() => {
+    if (!stems) return;
+    setBpmLoading(true);
+    getBpm(jobId)
+      .then(({ bpm: b, first_beat }) => {
+        setBpm(Math.round(b));
+        setFirstBeat(first_beat);
+      })
+      .catch(() => {}) // BPM optionnel — pas bloquant
+      .finally(() => setBpmLoading(false));
+  }, [jobId, stems]);
+
+  // Metronome (Web Audio API, synchronisé avec la lecture)
+  const { metroEnabled, setMetroEnabled, metroVolume, setMetroVolume } =
+    useMetronome(isPlaying, currentTimeRef, bpm ?? 0, speed, firstBeat);
 
   // Compute effective volume for a stem considering mute/solo
   const getEffectiveVolume = useCallback(
@@ -129,7 +153,7 @@ export default function MixerPage() {
     waveRefs.current[key] = waveRefs.current[key];
     readyCount.current++;
     if (readyCount.current === STEMS.length) {
-      const dur = waveRefs.current['vocals']?.getDuration() ?? 0;
+      const dur = waveRefs.current["vocals"]?.getDuration() ?? 0;
       setDuration(dur);
       setAllReady(true);
     }
@@ -137,11 +161,13 @@ export default function MixerPage() {
 
   const handleTimeUpdate = useCallback((t: number) => {
     setCurrentTime(t);
+    currentTimeRef.current = t;
     const { enabled, start, end } = loopRef.current;
     const dur = durationRef.current;
     if (enabled && end - start > 0.3 && t >= end && dur > 0) {
       STEMS.forEach(({ key }) => waveRefs.current[key]?.seekTo(start / dur));
       setCurrentTime(start);
+      currentTimeRef.current = start;
     }
   }, []);
 
@@ -194,16 +220,25 @@ export default function MixerPage() {
   // (handleWaveformMouseDown below handles both seek and loop selection)
 
   // Get audio time from mouse X relative to a DOM rect
-  const getTimeFromRect = useCallback((clientX: number, rect: DOMRect): number => {
-    const f = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
-    return f * durationRef.current;
-  }, []);
+  const getTimeFromRect = useCallback(
+    (clientX: number, rect: DOMRect): number => {
+      const f = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
+      return f * durationRef.current;
+    },
+    [],
+  );
 
   // Get audio time from mouse X on the seek bar
-  const getTimeFromX = useCallback((clientX: number): number => {
-    if (!seekBarRef.current) return 0;
-    return getTimeFromRect(clientX, seekBarRef.current.getBoundingClientRect());
-  }, [getTimeFromRect]);
+  const getTimeFromX = useCallback(
+    (clientX: number): number => {
+      if (!seekBarRef.current) return 0;
+      return getTimeFromRect(
+        clientX,
+        seekBarRef.current.getBoundingClientRect(),
+      );
+    },
+    [getTimeFromRect],
+  );
 
   // Ref that stores the bounding rect of the element currently being dragged (seekbar or waveform)
   const activeDragRectRef = useRef<DOMRect | null>(null);
@@ -231,10 +266,14 @@ export default function MixerPage() {
   );
 
   const loopModeRef = useRef(false);
-  useEffect(() => { loopModeRef.current = loopMode; }, [loopMode]);
+  useEffect(() => {
+    loopModeRef.current = loopMode;
+  }, [loopMode]);
 
   const isPlayingRef = useRef(false);
-  useEffect(() => { isPlayingRef.current = isPlaying; }, [isPlaying]);
+  useEffect(() => {
+    isPlayingRef.current = isPlaying;
+  }, [isPlaying]);
 
   // Window events for loop selection drag
   useEffect(() => {
@@ -256,7 +295,9 @@ export default function MixerPage() {
         const dur = durationRef.current;
         if (start !== null && end !== null && end - start > 0.3 && dur > 0) {
           // Boucle valide → seek au début de la boucle
-          STEMS.forEach(({ key }) => waveRefs.current[key]?.seekTo(start / dur));
+          STEMS.forEach(({ key }) =>
+            waveRefs.current[key]?.seekTo(start / dur),
+          );
           setCurrentTime(start);
         }
       }
@@ -264,11 +305,11 @@ export default function MixerPage() {
       activeDragRectRef.current = null;
       setIsSelecting(false);
     };
-    window.addEventListener('mousemove', onMouseMove);
-    window.addEventListener('mouseup', onMouseUp);
+    window.addEventListener("mousemove", onMouseMove);
+    window.addEventListener("mouseup", onMouseUp);
     return () => {
-      window.removeEventListener('mousemove', onMouseMove);
-      window.removeEventListener('mouseup', onMouseUp);
+      window.removeEventListener("mousemove", onMouseMove);
+      window.removeEventListener("mouseup", onMouseUp);
     };
   }, [getTimeFromRect]);
 
@@ -324,7 +365,7 @@ export default function MixerPage() {
       const mutedStems = STEMS.filter((s) => muted[s.key]).map((s) => s.key);
       const blob = await exportMix(jobId, mutedStems);
       const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
+      const a = document.createElement("a");
       a.href = url;
       a.download = `stemcut_mix_${jobId.slice(0, 8)}.mp3`;
       a.click();
@@ -337,14 +378,14 @@ export default function MixerPage() {
   if (loadError) {
     return (
       <div
-        className='min-h-screen flex items-center justify-center'
-        style={{ background: '#0a0a12' }}
+        className="min-h-screen flex items-center justify-center"
+        style={{ background: "#0a0a12" }}
       >
-        <div className='text-center'>
-          <p className='text-red-400 mb-4'>{loadError}</p>
+        <div className="text-center">
+          <p className="text-red-400 mb-4">{loadError}</p>
           <button
-            onClick={() => router.push('/')}
-            className='text-violet-400 hover:underline text-sm'
+            onClick={() => router.push("/")}
+            className="text-violet-400 hover:underline text-sm"
           >
             ← Retour à l&apos;accueil
           </button>
@@ -356,10 +397,10 @@ export default function MixerPage() {
   if (!stems) {
     return (
       <div
-        className='min-h-screen flex items-center justify-center'
-        style={{ background: '#0a0a12' }}
+        className="min-h-screen flex items-center justify-center"
+        style={{ background: "#0a0a12" }}
       >
-        <p className='text-gray-500 text-sm'>Chargement des stems...</p>
+        <p className="text-gray-500 text-sm">Chargement des stems...</p>
       </div>
     );
   }
@@ -374,48 +415,48 @@ export default function MixerPage() {
 
   return (
     <div
-      className='min-h-screen flex flex-col'
-      style={{ background: '#0a0a12' }}
+      className="min-h-screen flex flex-col"
+      style={{ background: "#0a0a12" }}
     >
       {/* Header */}
       <header
-        className='flex items-center gap-4 px-6 py-4 flex-shrink-0'
-        style={{ borderBottom: '1px solid #1e1e2e', paddingTop: '48px' }}
+        className="flex items-center gap-4 px-6 py-4 flex-shrink-0"
+        style={{ borderBottom: "1px solid #1e1e2e", paddingTop: "48px" }}
       >
         <button
-          onClick={() => router.push('/bibliotheque')}
-          className='no-drag p-2 rounded-lg text-gray-400 hover:text-white hover:bg-[#1e1e2e] transition-colors'
+          onClick={() => router.push("/bibliotheque")}
+          className="no-drag p-2 rounded-lg text-gray-400 hover:text-white hover:bg-[#1e1e2e] transition-colors"
         >
           <ArrowLeft size={18} />
         </button>
 
-        <div className='flex-1'>
-          <p className='text-gray-600 text-xs font-medium tracking-widest uppercase'>
+        <div className="flex-1">
+          <p className="text-gray-600 text-xs font-medium tracking-widest uppercase">
             Projet
           </p>
-          <p className='text-white font-semibold text-sm'>Mixer multi-pistes</p>
+          <p className="text-white font-semibold text-sm">Mixer multi-pistes</p>
         </div>
 
-        <div className='flex items-center gap-3'>
-          <p className='text-gray-500 text-xs'>
+        <div className="flex items-center gap-3">
+          <p className="text-gray-500 text-xs">
             {allReady
               ? "Les pistes mutées seront silencieuses dans l'export"
-              : 'Chargement des waveforms...'}
+              : "Chargement des waveforms..."}
           </p>
           <button
             onClick={handleExport}
             disabled={exporting || !allReady}
-            className='no-drag flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold text-white disabled:opacity-40 transition-opacity'
-            style={{ background: 'linear-gradient(135deg, #7c3aed, #d946ef)' }}
+            className="no-drag flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold text-white disabled:opacity-40 transition-opacity"
+            style={{ background: "linear-gradient(135deg, #7c3aed, #d946ef)" }}
           >
             <Download size={14} />
-            {exporting ? 'Export...' : 'Exporter un mix'}
+            {exporting ? "Export..." : "Exporter un mix"}
           </button>
         </div>
       </header>
 
       {/* Tracks */}
-      <div className='flex-1 overflow-y-auto py-4 px-6 flex flex-col gap-3'>
+      <div className="flex-1 overflow-y-auto py-4 px-6 flex flex-col gap-3">
         {STEMS.map(({ key, label, color }) => {
           const isMuted = muted[key];
           const isSolo = solo[key];
@@ -424,45 +465,45 @@ export default function MixerPage() {
           return (
             <div
               key={key}
-              className='flex items-center gap-4 rounded-2xl px-4 py-3'
-              style={{ background: '#111118', border: '1px solid #1e1e2e' }}
+              className="flex items-center gap-4 rounded-2xl px-4 py-3"
+              style={{ background: "#111118", border: "1px solid #1e1e2e" }}
             >
               {/* Icon */}
               <div
-                className='w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 text-white font-bold text-xs'
+                className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 text-white font-bold text-xs"
                 style={{ background: color }}
               >
                 {label[0]}
               </div>
 
               {/* Label + controls */}
-              <div className='flex flex-col gap-1 w-24 flex-shrink-0'>
-                <span className='text-white text-sm font-medium'>{label}</span>
-                <div className='flex gap-1'>
+              <div className="flex flex-col gap-1 w-24 flex-shrink-0">
+                <span className="text-white text-sm font-medium">{label}</span>
+                <div className="flex gap-1">
                   <button
                     onClick={() => toggleMute(key)}
-                    className='px-1.5 py-0.5 rounded text-xs font-bold transition-colors'
+                    className="px-1.5 py-0.5 rounded text-xs font-bold transition-colors"
                     style={{
-                      background: isMuted ? '#ef4444' : '#1e1e2e',
-                      color: isMuted ? 'white' : '#9ca3af',
+                      background: isMuted ? "#ef4444" : "#1e1e2e",
+                      color: isMuted ? "white" : "#9ca3af",
                     }}
                   >
                     M
                   </button>
                   <button
                     onClick={() => toggleSolo(key)}
-                    className='px-1.5 py-0.5 rounded text-xs font-bold transition-colors'
+                    className="px-1.5 py-0.5 rounded text-xs font-bold transition-colors"
                     style={{
-                      background: isSolo ? '#f59e0b' : '#1e1e2e',
-                      color: isSolo ? 'white' : '#9ca3af',
+                      background: isSolo ? "#f59e0b" : "#1e1e2e",
+                      color: isSolo ? "white" : "#9ca3af",
                     }}
                   >
                     S
                   </button>
                 </div>
-                <div className='flex items-center gap-1'>
+                <div className="flex items-center gap-1">
                   <input
-                    type='range'
+                    type="range"
                     min={0}
                     max={2}
                     step={0.01}
@@ -470,12 +511,12 @@ export default function MixerPage() {
                     onChange={(e) =>
                       handleVolumeChange(key, parseFloat(e.target.value))
                     }
-                    className='w-20'
+                    className="w-20"
                     style={{ accentColor: color }}
                   />
                   <span
-                    className='text-xs w-8 text-right'
-                    style={{ color: vol > 1 ? color : '#6b7280' }}
+                    className="text-xs w-8 text-right"
+                    style={{ color: vol > 1 ? color : "#6b7280" }}
                   >
                     {Math.round(vol * 100)}%
                   </span>
@@ -483,15 +524,24 @@ export default function MixerPage() {
               </div>
 
               {/* Separator */}
-              <div className='flex-shrink-0 self-stretch w-px' style={{ background: '#1e1e2e' }} />
+              <div
+                className="flex-shrink-0 self-stretch w-px"
+                style={{ background: "#1e1e2e" }}
+              />
 
               {/* Waveform */}
               <div
-                className='flex-1 min-w-0'
+                className="flex-1 min-w-0"
                 style={{
-                  position: 'relative',
+                  position: "relative",
                   height: 64,
-                  cursor: allReady ? (loopMode ? (isSelecting ? 'ew-resize' : 'crosshair') : 'pointer') : 'default',
+                  cursor: allReady
+                    ? loopMode
+                      ? isSelecting
+                        ? "ew-resize"
+                        : "crosshair"
+                      : "pointer"
+                    : "default",
                 }}
                 onMouseDown={handleWaveformMouseDown}
               >
@@ -502,28 +552,32 @@ export default function MixerPage() {
                   url={stems[key as keyof typeof stems]}
                   color={color}
                   onReady={() => handleReady(key)}
-                  onTimeUpdate={key === 'vocals' ? handleTimeUpdate : undefined}
-                  onFinish={key === 'vocals' ? handleFinish : undefined}
+                  onTimeUpdate={key === "vocals" ? handleTimeUpdate : undefined}
+                  onFinish={key === "vocals" ? handleFinish : undefined}
                 />
                 {/* Overlay: bloque les events du shadow DOM WaveSurfer */}
-                <div style={{ position: 'absolute', inset: 0, zIndex: 10 }} />
+                <div style={{ position: "absolute", inset: 0, zIndex: 10 }} />
                 {/* Loop selection overlay */}
-                {loopMode && loopStart !== null && loopEnd !== null && loopEnd > loopStart && duration > 0 && (
-                  <div
-                    style={{
-                      position: 'absolute',
-                      top: 0,
-                      bottom: 0,
-                      left: `${(loopStart / duration) * 100}%`,
-                      width: `${((loopEnd - loopStart) / duration) * 100}%`,
-                      background: 'rgba(251, 191, 36, 0.12)',
-                      borderLeft: '2px solid rgba(251, 191, 36, 0.7)',
-                      borderRight: '2px solid rgba(251, 191, 36, 0.7)',
-                      zIndex: 11,
-                      pointerEvents: 'none',
-                    }}
-                  />
-                )}
+                {loopMode &&
+                  loopStart !== null &&
+                  loopEnd !== null &&
+                  loopEnd > loopStart &&
+                  duration > 0 && (
+                    <div
+                      style={{
+                        position: "absolute",
+                        top: 0,
+                        bottom: 0,
+                        left: `${(loopStart / duration) * 100}%`,
+                        width: `${((loopEnd - loopStart) / duration) * 100}%`,
+                        background: "rgba(251, 191, 36, 0.12)",
+                        borderLeft: "2px solid rgba(251, 191, 36, 0.7)",
+                        borderRight: "2px solid rgba(251, 191, 36, 0.7)",
+                        zIndex: 11,
+                        pointerEvents: "none",
+                      }}
+                    />
+                  )}
               </div>
             </div>
           );
@@ -532,57 +586,63 @@ export default function MixerPage() {
 
       {/* Player bar */}
       <div
-        className='flex-shrink-0 px-6 py-4'
-        style={{ borderTop: '1px solid #1e1e2e', background: '#0d0d18' }}
+        className="flex-shrink-0 px-6 py-4"
+        style={{ borderTop: "1px solid #1e1e2e", background: "#0d0d18" }}
       >
         {/* Loop hint */}
         {loopMode && (
-          <p className='text-amber-400 text-xs mb-2 text-center'>
+          <p className="text-amber-400 text-xs mb-2 text-center">
             {hasLoop
               ? `⟳ Boucle : ${formatTime(loopStart!)} → ${formatTime(loopEnd!)}`
-              : 'Glissez sur la barre pour sélectionner un passage à boucler'}
+              : "Glissez sur la barre pour sélectionner un passage à boucler"}
           </p>
         )}
 
         {/* Custom seek bar */}
         <div
           ref={seekBarRef}
-          className='relative w-full h-2 rounded-full mb-3 select-none'
+          className="relative w-full h-2 rounded-full mb-3 select-none"
           style={{
-            background: '#2e2e4e',
-            cursor: allReady ? (loopMode ? (isSelecting ? 'ew-resize' : 'crosshair') : 'pointer') : 'default',
+            background: "#2e2e4e",
+            cursor: allReady
+              ? loopMode
+                ? isSelecting
+                  ? "ew-resize"
+                  : "crosshair"
+                : "pointer"
+              : "default",
             opacity: allReady ? 1 : 0.4,
-            pointerEvents: allReady ? 'auto' : 'none',
+            pointerEvents: allReady ? "auto" : "none",
           }}
           onMouseDown={handleSeekBarMouseDown}
         >
           {/* Playback progress fill */}
           <div
-            className='absolute inset-y-0 left-0 rounded-full pointer-events-none'
+            className="absolute inset-y-0 left-0 rounded-full pointer-events-none"
             style={{
               width: `${fraction * 100}%`,
-              background: 'linear-gradient(to right, #7c3aed, #d946ef)',
+              background: "linear-gradient(to right, #7c3aed, #d946ef)",
             }}
           />
           {/* Loop selection highlight */}
           {hasLoop && (
             <div
-              className='absolute inset-y-0 pointer-events-none'
+              className="absolute inset-y-0 pointer-events-none"
               style={{
                 left: `${(loopStart! / duration) * 100}%`,
                 width: `${((loopEnd! - loopStart!) / duration) * 100}%`,
-                background: 'rgba(251, 191, 36, 0.35)',
-                borderLeft: '2px solid #fbbf24',
-                borderRight: '2px solid #fbbf24',
-                borderRadius: '2px',
+                background: "rgba(251, 191, 36, 0.35)",
+                borderLeft: "2px solid #fbbf24",
+                borderRight: "2px solid #fbbf24",
+                borderRadius: "2px",
               }}
             />
           )}
         </div>
 
-        <div className='flex items-center gap-4'>
+        <div className="flex items-center gap-4">
           {/* Time */}
-          <span className='text-gray-500 text-xs w-10 text-right'>
+          <span className="text-gray-500 text-xs w-10 text-right">
             {formatTime(currentTime)}
           </span>
 
@@ -590,60 +650,141 @@ export default function MixerPage() {
           <button
             onClick={togglePlay}
             disabled={!allReady}
-            className='w-10 h-10 rounded-full flex items-center justify-center disabled:opacity-40 transition-opacity'
-            style={{ background: 'linear-gradient(135deg, #7c3aed, #d946ef)' }}
+            className="w-10 h-10 rounded-full flex items-center justify-center disabled:opacity-40 transition-opacity"
+            style={{ background: "linear-gradient(135deg, #7c3aed, #d946ef)" }}
           >
             {isPlaying ? (
-              <Pause size={16} className='text-white' />
+              <Pause size={16} className="text-white" />
             ) : (
-              <Play size={16} className='text-white ml-0.5' />
+              <Play size={16} className="text-white ml-0.5" />
             )}
           </button>
 
           {/* Duration */}
-          <span className='text-gray-500 text-xs'>{formatTime(duration)}</span>
+          <span className="text-gray-500 text-xs">{formatTime(duration)}</span>
 
           {/* Spacer */}
-          <div className='flex-1' />
+          <div className="flex-1" />
+
+          {/* BPM + Métronome */}
+          {(bpmLoading || bpm !== null) && (
+            <div className="flex items-center gap-2">
+              {/* Affichage et ajustement du BPM */}
+              {bpmLoading ? (
+                <span className="text-gray-600 text-xs">♩ …</span>
+              ) : bpm !== null ? (
+                <div
+                  className="flex items-center rounded-xl overflow-hidden"
+                  style={{ background: "#1e1e2e" }}
+                >
+                  <button
+                    onClick={() => setBpm((b) => Math.max(40, (b ?? 120) - 1))}
+                    className="px-2 py-1.5 text-gray-400 hover:text-white transition-colors text-sm leading-none"
+                  >
+                    −
+                  </button>
+                  <span className="text-xs text-gray-300 select-none px-1">
+                    ♩ {bpm}
+                  </span>
+                  <button
+                    onClick={() => setBpm((b) => Math.min(300, (b ?? 120) + 1))}
+                    className="px-2 py-1.5 text-gray-400 hover:text-white transition-colors text-sm leading-none"
+                  >
+                    +
+                  </button>
+                </div>
+              ) : null}
+
+              {/* Toggle métronome */}
+              {bpm !== null && (
+                <div className="relative group">
+                  <button
+                    onClick={() => setMetroEnabled((prev) => !prev)}
+                    disabled={!allReady}
+                    className="p-2 rounded-lg transition-colors disabled:opacity-40"
+                    style={{
+                      background: metroEnabled
+                        ? "rgba(99, 102, 241, 0.15)"
+                        : "transparent",
+                      color: metroEnabled ? "#818cf8" : "#6b7280",
+                      border: `1px solid ${metroEnabled ? "#818cf8" : "#2e2e4e"}`,
+                    }}
+                  >
+                    <Timer size={15} />
+                  </button>
+                  <div
+                    className="absolute bottom-full mb-2 right-0 px-2.5 py-1.5 rounded-lg text-xs text-white whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none"
+                    style={{
+                      background: "#1e1e2e",
+                      border: "1px solid #2e2e4e",
+                    }}
+                  >
+                    {metroEnabled
+                      ? "Désactiver le métronome"
+                      : "Activer le métronome"}
+                  </div>
+                </div>
+              )}
+
+              {/* Volume du métronome */}
+              {metroEnabled && bpm !== null && (
+                <input
+                  type="range"
+                  min={0}
+                  max={1}
+                  step={0.05}
+                  value={metroVolume}
+                  onChange={(e) => setMetroVolume(parseFloat(e.target.value))}
+                  className="w-16"
+                  style={{ accentColor: "#818cf8" }}
+                  title="Volume métronome"
+                />
+              )}
+            </div>
+          )}
 
           {/* Loop button */}
-          <div className='relative group'>
+          <div className="relative group">
             <button
               onClick={toggleLoopMode}
               disabled={!allReady}
-              className='p-2 rounded-lg transition-colors disabled:opacity-40'
+              className="p-2 rounded-lg transition-colors disabled:opacity-40"
               style={{
-                background: loopMode ? 'rgba(251, 191, 36, 0.12)' : 'transparent',
-                color: loopMode ? '#fbbf24' : '#6b7280',
-                border: `1px solid ${loopMode ? '#fbbf24' : '#2e2e4e'}`,
+                background: loopMode
+                  ? "rgba(251, 191, 36, 0.12)"
+                  : "transparent",
+                color: loopMode ? "#fbbf24" : "#6b7280",
+                border: `1px solid ${loopMode ? "#fbbf24" : "#2e2e4e"}`,
               }}
             >
               <Repeat size={15} />
             </button>
             <div
-              className='absolute bottom-full mb-2 right-0 px-2.5 py-1.5 rounded-lg text-xs text-white whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none'
-              style={{ background: '#1e1e2e', border: '1px solid #2e2e4e' }}
+              className="absolute bottom-full mb-2 right-0 px-2.5 py-1.5 rounded-lg text-xs text-white whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none"
+              style={{ background: "#1e1e2e", border: "1px solid #2e2e4e" }}
             >
-              {loopMode ? 'Désactiver la boucle' : 'Sélectionner une section à jouer en boucle'}
+              {loopMode
+                ? "Désactiver la boucle"
+                : "Sélectionner une section à jouer en boucle"}
             </div>
           </div>
 
           {/* Speed */}
           <div
-            className='flex items-center gap-1 rounded-xl overflow-hidden'
-            style={{ background: '#1e1e2e' }}
+            className="flex items-center gap-1 rounded-xl overflow-hidden"
+            style={{ background: "#1e1e2e" }}
           >
             {[0.75, 1, 1.25].map((r) => (
               <button
                 key={r}
                 onClick={() => setSpeedAll(r)}
-                className='px-3 py-1.5 text-xs font-medium transition-colors'
+                className="px-3 py-1.5 text-xs font-medium transition-colors"
                 style={{
                   background:
                     speed === r
-                      ? 'linear-gradient(135deg, #7c3aed, #d946ef)'
-                      : 'transparent',
-                  color: speed === r ? 'white' : '#9ca3af',
+                      ? "linear-gradient(135deg, #7c3aed, #d946ef)"
+                      : "transparent",
+                  color: speed === r ? "white" : "#9ca3af",
                 }}
               >
                 {r}x

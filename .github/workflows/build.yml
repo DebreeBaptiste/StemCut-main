@@ -1,4 +1,4 @@
-name: Build macOS DMG
+name: Build
 
 on:
   push:
@@ -12,6 +12,8 @@ jobs:
   build:
     name: Build (arm64)
     runs-on: macos-14
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
     steps:
       - name: Checkout
@@ -70,27 +72,89 @@ jobs:
           path: dist/*.dmg
           retention-days: 7
 
-  # ── Crée la release GitHub une seule fois avec les deux DMGs ──────────────
+  build-windows:
+    name: Build Windows NSIS
+    runs-on: windows-2022
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Setup Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Cache Python venv
+        id: cache-venv
+        uses: actions/cache@v4
+        with:
+          path: .venv
+          key: venv-win-py3.11-${{ hashFiles('backend/requirements.txt') }}-torch2.2.0cpu
+
+      - name: Create Python venv
+        if: steps.cache-venv.outputs.cache-hit != 'true'
+        run: |
+          python -m venv .venv
+          .venv\Scripts\pip install --upgrade pip
+          .venv\Scripts\pip install torch==2.2.0 torchaudio==2.2.0 --index-url https://download.pytorch.org/whl/cpu
+          .venv\Scripts\pip install -r backend/requirements.txt
+
+      - name: Install Node dependencies
+        run: npm ci
+
+      - name: Build frontend (Next.js)
+        shell: bash
+        run: |
+          cd frontend
+          npm ci
+          npm run build
+          cp -r .next/static .next/standalone/.next/static
+          [ -d public ] && cp -r public .next/standalone/public || true
+
+      - name: Package NSIS installer
+        run: |
+          $env:CSC_IDENTITY_AUTO_DISCOVERY = "false"
+          New-Item -ItemType Junction -Path "_venv" -Target "$env:GITHUB_WORKSPACE\.venv" -Force | Out-Null
+          npx electron-builder --win nsis --publish never
+          Remove-Item "_venv" -Force -Recurse -ErrorAction SilentlyContinue
+
+      - name: Upload EXE artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: exe-win-x64
+          path: dist/*.exe
+          retention-days: 7
+
+  # ── Crée la release GitHub avec le DMG macOS et l'installeur Windows ──────
   release:
     name: Create Release
-    needs: build
+    needs: [build, build-windows]
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/')
 
     steps:
-      - name: Download all DMG artifacts
+      - name: Download all artifacts
         uses: actions/download-artifact@v4
         with:
-          pattern: dmg-*
+          pattern: '{dmg-*,exe-*}'
           merge-multiple: true
-          path: dmgs/
+          path: release-files/
 
-      - name: List DMGs
-        run: ls -lh dmgs/
+      - name: List release files
+        run: ls -lh release-files/
 
       - name: Create draft release
         uses: softprops/action-gh-release@v2
         with:
-          files: dmgs/*.dmg
+          files: release-files/*
           draft: true
           generate_release_notes: true

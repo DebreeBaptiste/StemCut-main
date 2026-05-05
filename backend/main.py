@@ -61,14 +61,14 @@ STORAGE_DIR = Path(
 STORAGE_DIR.mkdir(parents=True, exist_ok=True)
 
 import logging
+from logging.handlers import RotatingFileHandler
 
-_log_path = STORAGE_DIR / "stemcut.log"
-logging.basicConfig(
-    filename=str(_log_path),
-    level=logging.DEBUG,
-    format="%(asctime)s %(levelname)s %(message)s",
-    force=True,
+_handler = RotatingFileHandler(
+    STORAGE_DIR / "stemcut.log", maxBytes=1_000_000, backupCount=2, encoding="utf-8"
 )
+_handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(message)s"))
+logging.root.addHandler(_handler)
+logging.root.setLevel(logging.DEBUG)
 log = logging.getLogger("stemcut")
 log.info("Backend started, storage=%s", STORAGE_DIR)
 
@@ -299,6 +299,50 @@ async def export_mix(request: ExportRequest):
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Export failed: {str(e)}")
+
+
+@app.get("/api/bpm/{job_id}")
+async def get_bpm(job_id: str):
+    """Détecte le BPM d'un job (résultat mis en cache dans bpm.json)."""
+    job_dir = STORAGE_DIR / job_id
+    if not job_dir.exists():
+        raise HTTPException(status_code=404, detail="Job not found")
+
+    bpm_file = job_dir / "bpm.json"
+    if bpm_file.exists():
+        with open(bpm_file) as f:
+            return json.load(f)
+
+    audio_path: Optional[Path] = None
+    for name in ("original.mp3", "original.wav", "original.flac", "original.m4a"):
+        p = job_dir / name
+        if p.exists():
+            audio_path = p
+            break
+
+    if audio_path is None:
+        raise HTTPException(status_code=404, detail="Audio file not found")
+
+    import asyncio
+    import concurrent.futures
+
+    def _detect_bpm(path: str):
+        import librosa  # import local pour ne pas ralentir le démarrage
+        y, sr = librosa.load(path, sr=None, duration=60, mono=True)
+        tempo, beat_frames = librosa.beat.beat_track(y=y, sr=sr)
+        beat_times = librosa.frames_to_time(beat_frames, sr=sr)
+        bpm_val = round(float(tempo), 1)
+        first_beat = round(float(beat_times[0]), 3) if len(beat_times) > 0 else 0.0
+        return {"bpm": bpm_val, "first_beat": first_beat}
+
+    loop = asyncio.get_running_loop()
+    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+        result = await loop.run_in_executor(pool, _detect_bpm, str(audio_path))
+
+    with open(bpm_file, "w") as f:
+        json.dump(result, f)
+
+    return result
 
 
 @app.get("/api/jobs")

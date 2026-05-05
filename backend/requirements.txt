@@ -7,5 +7,6 @@ torch==2.2.0
 torchaudio==2.2.0
 numpy<2
 soundfile
+librosa>=0.10.0
 yt-dlp>=2026.3.17
 imageio-ffmpeg
