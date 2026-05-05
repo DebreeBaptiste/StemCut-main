@@ -8,13 +8,17 @@ $VENV = "$REPO\.venv"
 Write-Host "=== StemCut - Build Windows ==="
 Write-Host "Dossier : $REPO"
 
-# 1. Venv Python (pour faire tourner PyInstaller - pas bundlé dans l'app)
+# 1. Venv Python 3.11 (torch 2.2.0 ne supporte pas Python 3.12+)
 if (-not (Test-Path $VENV)) {
     Write-Host ""
-    Write-Host "Creation du venv Python..."
+    Write-Host "Creation du venv Python 3.11..."
     Write-Host "   Premiere fois : ~15-30 min pour telecharger PyTorch + Demucs (~3-4 Go)"
     Write-Host ""
-    python -m venv $VENV
+    $py311 = (py -3.11 -c "import sys; print(sys.executable)" 2>$null)
+    if (-not $py311) {
+        Write-Error "Python 3.11 introuvable. Installe-le via : winget install Python.Python.3.11"
+    }
+    & $py311 -m venv $VENV
     & "$VENV\Scripts\pip" install --upgrade pip
     & "$VENV\Scripts\pip" install torch==2.2.0 torchaudio==2.2.0 --index-url https://download.pytorch.org/whl/cpu
     & "$VENV\Scripts\pip" install -r "$REPO\backend\requirements.txt"

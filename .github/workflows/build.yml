@@ -98,7 +98,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: .venv
-          key: venv-win-py3.11-${{ hashFiles('backend/requirements.txt') }}-torch2.2.0cpu
+          key: venv-win-py3.11-${{ hashFiles('backend/requirements.txt') }}-torch2.2.0cpu-pyinstaller
 
       - name: Create Python venv
         if: steps.cache-venv.outputs.cache-hit != 'true'
@@ -107,6 +107,15 @@ jobs:
           .venv\Scripts\pip install --upgrade pip
           .venv\Scripts\pip install torch==2.2.0 torchaudio==2.2.0 --index-url https://download.pytorch.org/whl/cpu
           .venv\Scripts\pip install -r backend/requirements.txt
+          .venv\Scripts\pip install pyinstaller
+
+      - name: Build backend binary (PyInstaller)
+        run: |
+          cd backend
+          ..\.venv\Scripts\python.exe -m PyInstaller stemcut_backend.spec `
+            --distpath "${{ github.workspace }}\dist-backend" `
+            --workpath "${{ github.workspace }}\build-backend" `
+            --noconfirm
 
       - name: Install Node dependencies
         run: npm ci
@@ -123,9 +132,7 @@ jobs:
       - name: Package NSIS installer
         run: |
           $env:CSC_IDENTITY_AUTO_DISCOVERY = "false"
-          New-Item -ItemType Junction -Path "_venv" -Target "$env:GITHUB_WORKSPACE\.venv" -Force | Out-Null
           npx electron-builder --win nsis --publish never
-          Remove-Item "_venv" -Force -Recurse -ErrorAction SilentlyContinue
 
       - name: Upload EXE artifact
         uses: actions/upload-artifact@v4
