@@ -145,8 +145,16 @@ def _process_via_api(
         if progress_callback:
             t2 = threading.Thread(target=_heartbeat, args=(stop_dl, progress_callback, 13, "Téléchargement du modèle (~450 Mo)..."), daemon=True)
             t2.start()
-        model = get_model('htdemucs')
-        stop_dl.set()
+        try:
+            model = get_model('htdemucs')
+        except Exception as e:
+            stop_dl.set()
+            print(f"❌ Failed to download model: {e}", flush=True)
+            if progress_callback:
+                progress_callback(13, f"Erreur téléchargement: {str(e)[:50]}...")
+            raise
+        finally:
+            stop_dl.set()
     else:
         if progress_callback:
             progress_callback(15, f"Chargement du modèle Demucs ({device})...")

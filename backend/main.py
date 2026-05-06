@@ -10,37 +10,66 @@ import json
 import threading
 import re
 from pathlib import Path
-
 import subprocess
 import tempfile
+import logging
+from logging.handlers import RotatingFileHandler
+
 import yt_dlp
 import imageio_ffmpeg
 from pydub import AudioSegment
 
+# ── Setup logging first ──────────────────────────────────────────────────────────
+
+STORAGE_DIR = Path(
+    os.environ.get("STEMCUT_STORAGE", str((Path(__file__).parent.parent / "storage").resolve()))
+)
+STORAGE_DIR.mkdir(parents=True, exist_ok=True)
+
+_handler = RotatingFileHandler(
+    STORAGE_DIR / "stemcut.log", maxBytes=1_000_000, backupCount=2, encoding="utf-8"
+)
+_handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(message)s"))
+logging.root.addHandler(_handler)
+logging.root.setLevel(logging.DEBUG)
+log = logging.getLogger("stemcut")
+log.info("Backend starting, storage=%s", STORAGE_DIR)
+
 
 def _setup_ffmpeg() -> str:
-    exe = imageio_ffmpeg.get_ffmpeg_exe()
-    tmp_dir = os.path.join(tempfile.gettempdir(), 'stemcut_ffmpeg')
-    os.makedirs(tmp_dir, exist_ok=True)
+    """Setup FFmpeg symlinks in temp directory."""
+    try:
+        log.info("🎬 Initializing FFmpeg...")
+        exe = imageio_ffmpeg.get_ffmpeg_exe()
+        log.debug(f"   FFmpeg executable: {exe}")
+        
+        tmp_dir = os.path.join(tempfile.gettempdir(), 'stemcut_ffmpeg')
+        os.makedirs(tmp_dir, exist_ok=True)
 
-    _is_win = os.name == 'nt'
-    for name in ('ffmpeg', 'ffprobe'):
-        dest_name = (name + '.exe') if _is_win else name
-        link = os.path.join(tmp_dir, dest_name)
-        if os.path.islink(link) or os.path.exists(link):
-            os.unlink(link)
-        try:
-            os.symlink(exe, link)
-        except (OSError, NotImplementedError):
-            import shutil as _shutil
-            _shutil.copy2(exe, link)
+        _is_win = os.name == 'nt'
+        for name in ('ffmpeg', 'ffprobe'):
+            dest_name = (name + '.exe') if _is_win else name
+            link = os.path.join(tmp_dir, dest_name)
+            if os.path.islink(link) or os.path.exists(link):
+                os.unlink(link)
+            try:
+                os.symlink(exe, link)
+                log.debug(f"   Symlinked {dest_name}")
+            except (OSError, NotImplementedError):
+                import shutil as _shutil
+                _shutil.copy2(exe, link)
+                log.debug(f"   Copied {dest_name}")
 
-    os.environ['PATH'] = tmp_dir + os.pathsep + os.environ.get('PATH', '')
-    _ffmpeg_bin = os.path.join(tmp_dir, 'ffmpeg.exe' if _is_win else 'ffmpeg')
-    _ffprobe_bin = os.path.join(tmp_dir, 'ffprobe.exe' if _is_win else 'ffprobe')
-    AudioSegment.converter = _ffmpeg_bin
-    AudioSegment.ffprobe = _ffprobe_bin
-    return tmp_dir
+        os.environ['PATH'] = tmp_dir + os.pathsep + os.environ.get('PATH', '')
+        _ffmpeg_bin = os.path.join(tmp_dir, 'ffmpeg.exe' if _is_win else 'ffmpeg')
+        _ffprobe_bin = os.path.join(tmp_dir, 'ffprobe.exe' if _is_win else 'ffprobe')
+        AudioSegment.converter = _ffmpeg_bin
+        AudioSegment.ffprobe = _ffprobe_bin
+        log.info("✅ FFmpeg initialized")
+        return tmp_dir
+    except Exception as e:
+        log.error(f"❌ FFmpeg setup failed: {e}")
+        raise
 
 
 _FFMPEG_DIR = _setup_ffmpeg()
@@ -58,23 +87,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-STORAGE_DIR = Path(
-    os.environ.get("STEMCUT_STORAGE", str((Path(__file__).parent.parent / "storage").resolve()))
-)
-STORAGE_DIR.mkdir(parents=True, exist_ok=True)
-
-import logging
-from logging.handlers import RotatingFileHandler
-
-_handler = RotatingFileHandler(
-    STORAGE_DIR / "stemcut.log", maxBytes=1_000_000, backupCount=2, encoding="utf-8"
-)
-_handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(message)s"))
-logging.root.addHandler(_handler)
-logging.root.setLevel(logging.DEBUG)
-log = logging.getLogger("stemcut")
-log.info("Backend started, storage=%s", STORAGE_DIR)
 
 
 # ── Progress helpers ──────────────────────────────────────────────────────────

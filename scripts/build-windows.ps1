@@ -34,7 +34,17 @@ if (-not (Test-Path $VENV)) {
     }
 }
 
-# 2. Build backend autonome avec PyInstaller
+# 2a. Preload Demucs model (fix Windows bundle blocker)
+Write-Host ""
+Write-Host "Preloading Demucs models (~450 Mo)..."
+Set-Location "$REPO\backend"
+& "$VENV\Scripts\python.exe" preload_models.py
+if ($LASTEXITCODE -ne 0) {
+    Write-Error "Model preload failed - PyInstaller build may have issues on Windows"
+    exit 1
+}
+
+# 2b. Build backend autonome avec PyInstaller
 Write-Host ""
 Write-Host "Build backend PyInstaller..."
 Set-Location "$REPO\backend"

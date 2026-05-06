@@ -25,7 +25,15 @@ echo "📦 Syncing requirements..."
 "$VENV/bin/pip" install -q -r "$REPO/backend/requirements.txt"
 
 echo ""
-echo "🔨 Running PyInstaller..."
+echo "� Preloading Demucs models (~450 Mo)..."
+cd "$REPO/backend"
+"$VENV/bin/python" preload_models.py
+if [ $? -ne 0 ]; then
+  echo "⚠️  Model preload failed, build may be slow on first run"
+fi
+
+echo ""
+echo "�🔨 Running PyInstaller..."
 cd "$REPO/backend"
 "$VENV/bin/pyinstaller" stemcut_backend.spec \
   --distpath "$REPO/dist-backend" \
