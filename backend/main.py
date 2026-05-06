@@ -39,7 +39,7 @@ log.info("Backend starting, storage=%s", STORAGE_DIR)
 def _setup_ffmpeg() -> str:
     """Setup FFmpeg symlinks in temp directory."""
     try:
-        log.info("🎬 Initializing FFmpeg...")
+        log.info("Initializing FFmpeg...")
         exe = imageio_ffmpeg.get_ffmpeg_exe()
         log.debug(f"   FFmpeg executable: {exe}")
         
@@ -65,10 +65,10 @@ def _setup_ffmpeg() -> str:
         _ffprobe_bin = os.path.join(tmp_dir, 'ffprobe.exe' if _is_win else 'ffprobe')
         AudioSegment.converter = _ffmpeg_bin
         AudioSegment.ffprobe = _ffprobe_bin
-        log.info("✅ FFmpeg initialized")
+        log.info("FFmpeg initialized")
         return tmp_dir
     except Exception as e:
-        log.error(f"❌ FFmpeg setup failed: {e}")
+        log.error(f"FFmpeg setup failed: {e}")
         raise
 
 
@@ -103,7 +103,7 @@ def _download_youtube(youtube_url: str, job_dir: Path, progress_cb=None) -> Path
     if video_id_match:
         video_id = video_id_match.group(1)
         youtube_url = f"https://www.youtube.com/watch?v={video_id}"
-        print(f"🎬 Cleaned YouTube URL: {youtube_url}", flush=True)
+        print(f"Cleaned YouTube URL: {youtube_url}", flush=True)
 
     def _ydl_hook(d):
         if d['status'] == 'downloading' and progress_cb:
@@ -130,10 +130,10 @@ def _download_youtube(youtube_url: str, job_dir: Path, progress_cb=None) -> Path
         # La conversion MP3 est faite manuellement après téléchargement
     }
 
-    print(f"⬇️  Starting yt-dlp download to {job_dir}", flush=True)
+    print(f"Starting yt-dlp download to {job_dir}", flush=True)
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
         ydl.download([youtube_url])
-    print(f"⬇️  yt-dlp download finished", flush=True)
+    print("yt-dlp download finished", flush=True)
 
     candidates = list(job_dir.glob("original.*"))
     if not candidates:
@@ -181,7 +181,7 @@ def _run_job(
 
     except Exception as e:
         log.exception("Job %s failed: %s", job_id, e)
-        print(f"❌ Job {job_id} failed: {e}", flush=True)
+        print(f"ERROR: Job {job_id} failed: {e}", flush=True)
         _write_progress(job_dir, 0, str(e), status="error")
 
 

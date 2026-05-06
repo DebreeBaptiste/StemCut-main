@@ -14,7 +14,7 @@ from pathlib import Path
 
 def preload_demucs_model():
     """Download htdemucs model to cache directory."""
-    print("📦 Preloading Demucs htdemucs model...")
+    print("Preloading Demucs htdemucs model...")
     
     # Set up cache directory explicitly
     cache_dir = Path.home() / ".cache" / "torch" / "hub" / "checkpoints"
@@ -33,23 +33,23 @@ def preload_demucs_model():
         # This will download the model if not cached
         print("   Downloading model...")
         model = get_model('htdemucs')
-        print(f"   ✅ Model cached successfully: {model}")
+        print(f"   Model cached successfully: {model}")
         
         # Verify cache
         cached_files = list(cache_dir.glob("htdemucs*"))
         if cached_files:
-            print(f"   ✅ Cached files: {len(cached_files)} file(s)")
+            print(f"   Cached files: {len(cached_files)} file(s)")
             for f in cached_files:
                 size_mb = f.stat().st_size / (1024 * 1024)
                 print(f"      - {f.name} ({size_mb:.1f} MB)")
         else:
-            print("   ⚠️  No cached files found after download!")
+            print("   WARNING: No cached files found after download!")
             return False
             
         return True
         
     except Exception as e:
-        print(f"   ❌ Error: {e}")
+        print(f"   ERROR: {e}")
         import traceback
         traceback.print_exc()
         return False

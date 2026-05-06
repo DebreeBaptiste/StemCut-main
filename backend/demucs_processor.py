@@ -110,33 +110,34 @@ def _process_via_api(
 
     import time as _time
     _t_start = _time.time()
-    print("🔧 [init] importing torch...", flush=True)
-    import torch
-    print(f"🔧 [init] torch imported in {_time.time()-_t_start:.1f}s", flush=True)
+    try:
+        print("[init] importing torch...", flush=True)
+        import torch
+        print(f"[init] torch imported in {_time.time()-_t_start:.1f}s", flush=True)
 
-    _t2 = _time.time()
-    print("🔧 [init] importing demucs.pretrained...", flush=True)
-    from demucs.pretrained import get_model
-    print(f"🔧 [init] demucs.pretrained imported in {_time.time()-_t2:.1f}s", flush=True)
+        _t2 = _time.time()
+        print("[init] importing demucs.pretrained...", flush=True)
+        from demucs.pretrained import get_model
+        print(f"[init] demucs.pretrained imported in {_time.time()-_t2:.1f}s", flush=True)
 
-    _t3 = _time.time()
-    print("🔧 [init] importing demucs.apply...", flush=True)
-    from demucs.apply import apply_model
-    print(f"🔧 [init] demucs.apply imported in {_time.time()-_t3:.1f}s", flush=True)
+        _t3 = _time.time()
+        print("[init] importing demucs.apply...", flush=True)
+        from demucs.apply import apply_model
+        print(f"[init] demucs.apply imported in {_time.time()-_t3:.1f}s", flush=True)
 
-    _t4 = _time.time()
-    print("🔧 [init] importing demucs.audio...", flush=True)
-    from demucs.audio import save_audio
-    print(f"🔧 [init] demucs.audio imported in {_time.time()-_t4:.1f}s  —  total init: {_time.time()-_t_start:.1f}s", flush=True)
-
-    stop_init.set()
+        _t4 = _time.time()
+        print("[init] importing demucs.audio...", flush=True)
+        from demucs.audio import save_audio
+        print(f"[init] demucs.audio imported in {_time.time()-_t4:.1f}s - total init: {_time.time()-_t_start:.1f}s", flush=True)
+    finally:
+        stop_init.set()
 
     # Restore multi-threaded inference now that init is done
     # (OMP_NUM_THREADS=1 was set only to prevent init deadlocks)
     torch.set_num_threads(max(1, (os.cpu_count() or 2) - 1))
 
     device = _get_best_device()
-    print(f"🎛️ Using device: {device} (frozen mode)", flush=True)
+    print(f"Using device: {device} (frozen mode)", flush=True)
 
     if not _model_is_cached():
         if progress_callback:
@@ -149,7 +150,7 @@ def _process_via_api(
             model = get_model('htdemucs')
         except Exception as e:
             stop_dl.set()
-            print(f"❌ Failed to download model: {e}", flush=True)
+            print(f"ERROR: Failed to download model: {e}", flush=True)
             if progress_callback:
                 progress_callback(13, f"Erreur téléchargement: {str(e)[:50]}...")
             raise
@@ -192,7 +193,7 @@ def _process_via_api(
             sources = apply_model(model, wav, progress=False)
     except Exception as e:
         if device != 'cpu':
-            print(f"⚠️ {device} failed ({e}), falling back to CPU...", flush=True)
+            print(f"WARNING: {device} failed ({e}), falling back to CPU...", flush=True)
             if progress_callback:
                 progress_callback(25, "Reprise sur CPU...")
             model.to('cpu')
@@ -227,7 +228,7 @@ def _process_via_api(
     if progress_callback:
         progress_callback(98, "Finalisation...")
 
-    print(f"✅ Stems generated (MP3) in {output_dir}", flush=True)
+    print(f"Stems generated (MP3) in {output_dir}", flush=True)
 
 
 def _process_via_subprocess(
@@ -238,7 +239,7 @@ def _process_via_subprocess(
     """Dev path: spawns `python -m demucs` subprocess for live tqdm output."""
     python_executable = sys.executable
     device = _get_best_device()
-    print(f"🎛️ Using device: {device}", flush=True)
+    print(f"Using device: {device}", flush=True)
 
     if progress_callback:
         progress_callback(15, f"Démarrage Demucs ({device})...")
@@ -283,7 +284,7 @@ def _process_via_subprocess(
     returncode, demucs_log = run_demucs(device)
 
     if returncode != 0 and device == "mps":
-        print("⚠️ MPS failed, falling back to CPU...", flush=True)
+        print("WARNING: MPS failed, falling back to CPU...", flush=True)
         if progress_callback:
             progress_callback(15, "MPS indisponible, reprise sur CPU...")
         returncode, demucs_log = run_demucs("cpu")
@@ -319,7 +320,7 @@ def _process_via_subprocess(
     if progress_callback:
         progress_callback(98, "Finalisation...")
 
-    print(f"✅ Stems generated (MP3) in {output_dir}", flush=True)
+    print(f"Stems generated (MP3) in {output_dir}", flush=True)
 
 
 def process_audio(
