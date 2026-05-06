@@ -71,7 +71,19 @@ export default function MixerPage() {
   });
   const [exporting, setExporting] = useState(false);
   const [exportingDaw, setExportingDaw] = useState(false);
-  const [exportMessage, setExportMessage] = useState("");
+  const [toasts, setToasts] = useState<
+    { id: number; type: "success" | "error"; message: string }[]
+  >([]);
+  const toastIdRef = useRef(0);
+
+  const addToast = useCallback((type: "success" | "error", message: string) => {
+    const id = ++toastIdRef.current;
+    setToasts((prev) => [...prev, { id, type, message }]);
+    setTimeout(
+      () => setToasts((prev) => prev.filter((t) => t.id !== id)),
+      5000,
+    );
+  }, []);
 
   // BPM state
   const [bpm, setBpm] = useState<number | null>(null);
@@ -377,7 +389,6 @@ export default function MixerPage() {
 
   const handleExport = useCallback(async () => {
     setExporting(true);
-    setExportMessage("");
     try {
       const mutedStems = STEMS.filter((s) => muted[s.key]).map((s) => s.key);
       const { blob, filename } = await exportMix(jobId, mutedStems);
@@ -388,19 +399,26 @@ export default function MixerPage() {
           base64,
           filename,
         );
-        setExportMessage(`Fichier enregistre: ${savedPath}`);
+        addToast(
+          "success",
+          `Enregistré dans Téléchargements : ${savedPath.split(/[\\/]/).pop()}`,
+        );
       } else {
         triggerBrowserDownload(blob, filename);
-        setExportMessage(`Telechargement lance: ${filename}`);
+        addToast("success", `Téléchargement lancé : ${filename}`);
       }
+    } catch (err) {
+      addToast(
+        "error",
+        `Erreur export : ${err instanceof Error ? err.message : String(err)}`,
+      );
     } finally {
       setExporting(false);
     }
-  }, [jobId, muted]);
+  }, [jobId, muted, addToast]);
 
   const handleDawExport = useCallback(async () => {
     setExportingDaw(true);
-    setExportMessage("");
     try {
       const { blob, filename } = await exportDawPack(jobId);
 
@@ -410,15 +428,23 @@ export default function MixerPage() {
           base64,
           filename,
         );
-        setExportMessage(`Fichier enregistre: ${savedPath}`);
+        addToast(
+          "success",
+          `Pack DAW enregistré : ${savedPath.split(/[\\/]/).pop()}`,
+        );
       } else {
         triggerBrowserDownload(blob, filename);
-        setExportMessage(`Telechargement lance: ${filename}`);
+        addToast("success", `Téléchargement lancé : ${filename}`);
       }
+    } catch (err) {
+      addToast(
+        "error",
+        `Erreur export DAW : ${err instanceof Error ? err.message : String(err)}`,
+      );
     } finally {
       setExportingDaw(false);
     }
-  }, [jobId]);
+  }, [jobId, addToast]);
 
   const triggerBrowserDownload = (blob: Blob, filename: string) => {
     const url = URL.createObjectURL(blob);
@@ -532,14 +558,6 @@ export default function MixerPage() {
           </button>
         </div>
       </header>
-
-      {exportMessage && (
-        <div className="px-6 pt-3 pb-1">
-          <p className="text-xs" style={{ color: "#9ca3af" }}>
-            {exportMessage}
-          </p>
-        </div>
-      )}
 
       {/* Tracks */}
       <div className="flex-1 overflow-y-auto py-4 px-6 flex flex-col gap-3">
@@ -878,6 +896,41 @@ export default function MixerPage() {
             ))}
           </div>
         </div>
+      </div>
+
+      {/* Toast notifications */}
+      <div
+        style={{
+          position: "fixed",
+          bottom: "24px",
+          right: "24px",
+          display: "flex",
+          flexDirection: "column",
+          gap: "10px",
+          zIndex: 9999,
+          pointerEvents: "none",
+        }}
+      >
+        {toasts.map((t) => (
+          <div
+            key={t.id}
+            style={{
+              background: t.type === "success" ? "#1a2e1a" : "#2e1a1a",
+              border: `1px solid ${t.type === "success" ? "#22c55e" : "#ef4444"}`,
+              color: t.type === "success" ? "#86efac" : "#fca5a5",
+              borderRadius: "12px",
+              padding: "12px 16px",
+              fontSize: "13px",
+              maxWidth: "360px",
+              boxShadow: "0 4px 24px rgba(0,0,0,0.5)",
+              pointerEvents: "auto",
+              lineHeight: 1.4,
+            }}
+          >
+            {t.type === "success" ? "✓ " : "✗ "}
+            {t.message}
+          </div>
+        ))}
       </div>
     </div>
   );
