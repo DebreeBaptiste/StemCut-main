@@ -1,6 +1,6 @@
 {
   "name": "stemcut",
-  "version": "1.0.0",
+  "version": "1.4.7",
   "description": "StemCut - Isolez chaque instrument de vos morceaux",
   "main": "main.js",
   "scripts": {
@@ -16,15 +16,23 @@
     "mac": {
       "icon": "icons/icon.icns",
       "category": "public.app-category.music",
-      "target": ["dmg", "zip"]
+      "target": [
+        "dmg",
+        "zip"
+      ]
     },
     "linux": {
       "icon": "icons/icon.png",
-      "target": ["AppImage", "deb"]
+      "target": [
+        "AppImage",
+        "deb"
+      ]
     },
     "win": {
       "icon": "icons/icon.png",
-      "target": ["nsis"]
+      "target": [
+        "nsis"
+      ]
     },
     "files": [
       "main.js",
@@ -34,7 +42,10 @@
       {
         "from": "../frontend",
         "to": "frontend",
-        "filter": ["**/*", "!node_modules"]
+        "filter": [
+          "**/*",
+          "!node_modules"
+        ]
       }
     ]
   },

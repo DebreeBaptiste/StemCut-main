@@ -38,7 +38,7 @@ if (-not (Test-Path $VENV)) {
 Write-Host ""
 Write-Host "Build backend PyInstaller..."
 Set-Location "$REPO\backend"
-& "$VENV\Scripts\pyinstaller" stemcut_backend.spec `
+& "$VENV\Scripts\python.exe" -m PyInstaller stemcut_backend.spec `
     --distpath "$REPO\dist-backend" `
     --workpath "$REPO\build-backend" `
     --noconfirm

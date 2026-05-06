@@ -114,8 +114,6 @@ def _download_youtube(youtube_url: str, job_dir: Path, progress_cb=None) -> Path
         "socket_timeout": 30,
         "retries": 3,
         "progress_hooks": [_ydl_hook],
-        # Force iOS/Android client: pas besoin de JS runtime (deno/node)
-        "extractor_args": {"youtube": {"player_client": ["ios", "android"]}},
         # Pas de FFmpegExtractAudio : imageio_ffmpeg ne fournit pas ffprobe
         # La conversion MP3 est faite manuellement après téléchargement
     }
