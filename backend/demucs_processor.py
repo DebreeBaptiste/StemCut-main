@@ -85,12 +85,18 @@ def _load_audio_no_ffprobe(input_path: str, samplerate: int, channels: int) -> '
         Path(tmp_path).unlink(missing_ok=True)
 
 
-def _heartbeat(stop_event: threading.Event, progress_callback: Callable, start_pct: int, msg: str):
-    """Updates progress message every 10s so the UI doesn't look frozen."""
-    elapsed = 0
+def _heartbeat(
+    stop_event: threading.Event,
+    progress_callback: Callable,
+    start_pct: int,
+    max_pct: int,
+    msg: str,
+):
+    """Updates progress with a slowly increasing percentage while a step is running."""
+    pct = start_pct
     while not stop_event.wait(10):
-        elapsed += 10
-        progress_callback(start_pct, f"{msg} ({elapsed}s)")
+        pct = min(pct + 1, max_pct)
+        progress_callback(pct, f"{msg} {pct}%")
 
 
 def _process_via_api(
@@ -105,30 +111,26 @@ def _process_via_api(
     # Heartbeat during torch import (can take 30-60s in frozen binary)
     stop_init = threading.Event()
     if progress_callback:
-        t = threading.Thread(target=_heartbeat, args=(stop_init, progress_callback, 11, "Initialisation des modules IA..."), daemon=True)
+        t = threading.Thread(
+            target=_heartbeat,
+            args=(stop_init, progress_callback, 11, 19, "Initialisation des modules IA..."),
+            daemon=True,
+        )
         t.start()
 
     import time as _time
     _t_start = _time.time()
     try:
-        print("[init] importing torch...", flush=True)
         import torch
-        print(f"[init] torch imported in {_time.time()-_t_start:.1f}s", flush=True)
 
         _t2 = _time.time()
-        print("[init] importing demucs.pretrained...", flush=True)
         from demucs.pretrained import get_model
-        print(f"[init] demucs.pretrained imported in {_time.time()-_t2:.1f}s", flush=True)
 
         _t3 = _time.time()
-        print("[init] importing demucs.apply...", flush=True)
         from demucs.apply import apply_model
-        print(f"[init] demucs.apply imported in {_time.time()-_t3:.1f}s", flush=True)
 
         _t4 = _time.time()
-        print("[init] importing demucs.audio...", flush=True)
         from demucs.audio import save_audio
-        print(f"[init] demucs.audio imported in {_time.time()-_t4:.1f}s - total init: {_time.time()-_t_start:.1f}s", flush=True)
     finally:
         stop_init.set()
 
@@ -137,20 +139,22 @@ def _process_via_api(
     torch.set_num_threads(max(1, (os.cpu_count() or 2) - 1))
 
     device = _get_best_device()
-    print(f"Using device: {device} (frozen mode)", flush=True)
 
     if not _model_is_cached():
         if progress_callback:
             progress_callback(13, "Téléchargement du modèle Demucs (~450 Mo)...")
         stop_dl = threading.Event()
         if progress_callback:
-            t2 = threading.Thread(target=_heartbeat, args=(stop_dl, progress_callback, 13, "Téléchargement du modèle (~450 Mo)..."), daemon=True)
+            t2 = threading.Thread(
+                target=_heartbeat,
+                args=(stop_dl, progress_callback, 13, 24, "Téléchargement du modèle (~450 Mo)..."),
+                daemon=True,
+            )
             t2.start()
         try:
             model = get_model('htdemucs')
         except Exception as e:
             stop_dl.set()
-            print(f"ERROR: Failed to download model: {e}", flush=True)
             if progress_callback:
                 progress_callback(13, f"Erreur téléchargement: {str(e)[:50]}...")
             raise
@@ -181,11 +185,13 @@ def _process_via_api(
     stop_infer = threading.Event()
     if progress_callback:
         _t0 = time.time()
+
         def _infer_heartbeat():
             while not stop_infer.wait(8):
                 elapsed = int(time.time() - _t0)
                 pct = min(26 + elapsed // 6, 79)
-                progress_callback(pct, f"Séparation en cours... ({elapsed}s)")
+                progress_callback(pct, f"Séparation en cours... {pct}%")
+
         threading.Thread(target=_infer_heartbeat, daemon=True).start()
 
     try:
@@ -193,7 +199,6 @@ def _process_via_api(
             sources = apply_model(model, wav, progress=False)
     except Exception as e:
         if device != 'cpu':
-            print(f"WARNING: {device} failed ({e}), falling back to CPU...", flush=True)
             if progress_callback:
                 progress_callback(25, "Reprise sur CPU...")
             model.to('cpu')
@@ -228,8 +233,6 @@ def _process_via_api(
     if progress_callback:
         progress_callback(98, "Finalisation...")
 
-    print(f"Stems generated (MP3) in {output_dir}", flush=True)
-
 
 def _process_via_subprocess(
     input_path: str,
@@ -239,7 +242,6 @@ def _process_via_subprocess(
     """Dev path: spawns `python -m demucs` subprocess for live tqdm output."""
     python_executable = sys.executable
     device = _get_best_device()
-    print(f"Using device: {device}", flush=True)
 
     if progress_callback:
         progress_callback(15, f"Démarrage Demucs ({device})...")
@@ -271,7 +273,6 @@ def _process_via_subprocess(
             line = line.strip()
             if line:
                 all_lines.append(line)
-                print(f"[demucs/{dev}] {line}", flush=True)
             match = re.search(r"(\d+)%", line)
             if match and progress_callback:
                 pct = int(match.group(1))
@@ -284,7 +285,6 @@ def _process_via_subprocess(
     returncode, demucs_log = run_demucs(device)
 
     if returncode != 0 and device == "mps":
-        print("WARNING: MPS failed, falling back to CPU...", flush=True)
         if progress_callback:
             progress_callback(15, "MPS indisponible, reprise sur CPU...")
         returncode, demucs_log = run_demucs("cpu")
@@ -319,8 +319,6 @@ def _process_via_subprocess(
 
     if progress_callback:
         progress_callback(98, "Finalisation...")
-
-    print(f"Stems generated (MP3) in {output_dir}", flush=True)
 
 
 def process_audio(

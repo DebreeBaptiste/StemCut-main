@@ -71,6 +71,7 @@ export default function MixerPage() {
   });
   const [exporting, setExporting] = useState(false);
   const [exportingDaw, setExportingDaw] = useState(false);
+  const [exportMessage, setExportMessage] = useState("");
 
   // BPM state
   const [bpm, setBpm] = useState<number | null>(null);
@@ -376,15 +377,22 @@ export default function MixerPage() {
 
   const handleExport = useCallback(async () => {
     setExporting(true);
+    setExportMessage("");
     try {
       const mutedStems = STEMS.filter((s) => muted[s.key]).map((s) => s.key);
-      const blob = await exportMix(jobId, mutedStems);
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `stemcut_mix_${jobId.slice(0, 8)}.mp3`;
-      a.click();
-      URL.revokeObjectURL(url);
+      const { blob, filename } = await exportMix(jobId, mutedStems);
+
+      if (window.electronAPI?.saveDownload) {
+        const base64 = await blobToBase64(blob);
+        const savedPath = await window.electronAPI.saveDownload(
+          base64,
+          filename,
+        );
+        setExportMessage(`Fichier enregistre: ${savedPath}`);
+      } else {
+        triggerBrowserDownload(blob, filename);
+        setExportMessage(`Telechargement lance: ${filename}`);
+      }
     } finally {
       setExporting(false);
     }
@@ -392,18 +400,49 @@ export default function MixerPage() {
 
   const handleDawExport = useCallback(async () => {
     setExportingDaw(true);
+    setExportMessage("");
     try {
-      const blob = await exportDawPack(jobId);
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `stemcut_daw_${jobId.slice(0, 8)}.zip`;
-      a.click();
-      URL.revokeObjectURL(url);
+      const { blob, filename } = await exportDawPack(jobId);
+
+      if (window.electronAPI?.saveDownload) {
+        const base64 = await blobToBase64(blob);
+        const savedPath = await window.electronAPI.saveDownload(
+          base64,
+          filename,
+        );
+        setExportMessage(`Fichier enregistre: ${savedPath}`);
+      } else {
+        triggerBrowserDownload(blob, filename);
+        setExportMessage(`Telechargement lance: ${filename}`);
+      }
     } finally {
       setExportingDaw(false);
     }
   }, [jobId]);
+
+  const triggerBrowserDownload = (blob: Blob, filename: string) => {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  };
+
+  const blobToBase64 = (blob: Blob): Promise<string> =>
+    new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        const dataUrl = String(reader.result || "");
+        const base64 = dataUrl.includes(",") ? dataUrl.split(",")[1] : "";
+        resolve(base64);
+      };
+      reader.onerror = () =>
+        reject(new Error("Impossible de lire le fichier d'export"));
+      reader.readAsDataURL(blob);
+    });
 
   if (loadError) {
     return (
@@ -493,6 +532,14 @@ export default function MixerPage() {
           </button>
         </div>
       </header>
+
+      {exportMessage && (
+        <div className="px-6 pt-3 pb-1">
+          <p className="text-xs" style={{ color: "#9ca3af" }}>
+            {exportMessage}
+          </p>
+        </div>
+      )}
 
       {/* Tracks */}
       <div className="flex-1 overflow-y-auto py-4 px-6 flex flex-col gap-3">

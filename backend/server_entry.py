@@ -16,7 +16,6 @@ _startup_log = Path(tempfile.gettempdir()) / "stemcut_startup.log"
 def _slog(msg: str):
     ts = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     line = f"{ts}  {msg}\n"
-    print(line, end="", flush=True)
     try:
         with open(_startup_log, "a", encoding="utf-8") as _f:
             _f.write(line)
@@ -74,4 +73,4 @@ except Exception as _e:
 
 if __name__ == "__main__":
     _slog("starting uvicorn on 127.0.0.1:8000")
-    uvicorn.run(app, host="127.0.0.1", port=8000, log_level="info")
+    uvicorn.run(app, host="127.0.0.1", port=8000, log_level="warning")

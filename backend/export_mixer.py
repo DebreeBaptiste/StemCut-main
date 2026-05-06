@@ -50,6 +50,4 @@ def create_mix(job_dir: str, muted_stems: List[str]) -> str:
     # Exporter en MP3
     output_path = job_path / "export.mp3"
     mix.export(str(output_path), format="mp3", bitrate="320k")
-
-    print(f"Mix exported to {output_path}")
     return str(output_path)

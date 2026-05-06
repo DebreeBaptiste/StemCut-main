@@ -31,9 +31,8 @@ _handler = RotatingFileHandler(
 )
 _handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(message)s"))
 logging.root.addHandler(_handler)
-logging.root.setLevel(logging.DEBUG)
+logging.root.setLevel(logging.WARNING)
 log = logging.getLogger("stemcut")
-log.info("Backend starting, storage=%s", STORAGE_DIR)
 
 
 def _setup_ffmpeg() -> str:
@@ -91,9 +90,66 @@ app.add_middleware(
 
 # ── Progress helpers ──────────────────────────────────────────────────────────
 
-def _write_progress(job_dir: Path, progress: int, message: str = "", status: str = "processing"):
-    with open(job_dir / "progress.json", "w") as f:
-        json.dump({"status": status, "progress": progress, "message": message}, f)
+def _read_progress(job_dir: Path) -> dict:
+    progress_file = job_dir / "progress.json"
+    if not progress_file.exists():
+        return {}
+    try:
+        with open(progress_file, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        return {}
+
+
+def _resolve_job_dir(job_id: str) -> Optional[Path]:
+    # Fast path: legacy behavior where folder name == job_id
+    direct = STORAGE_DIR / job_id
+    if direct.exists() and direct.is_dir():
+        return direct
+
+    # Robust path: find folder by stable job_id stored in metadata
+    if not STORAGE_DIR.exists():
+        return None
+    for d in STORAGE_DIR.iterdir():
+        if not d.is_dir():
+            continue
+        data = _read_progress(d)
+        if data.get("job_id") == job_id:
+            return d
+    return None
+
+
+def _require_job_dir(job_id: str) -> Path:
+    job_dir = _resolve_job_dir(job_id)
+    if not job_dir:
+        raise HTTPException(status_code=404, detail="Job not found")
+    return job_dir
+
+
+def _write_progress(
+    job_dir: Path,
+    progress: int,
+    message: str = "",
+    status: str = "processing",
+    job_id: Optional[str] = None,
+):
+    data = _read_progress(job_dir)
+    data.update({"status": status, "progress": progress, "message": message})
+    if job_id:
+        data["job_id"] = job_id
+    progress_file = job_dir / "progress.json"
+    with open(progress_file, "w", encoding="utf-8") as f:
+        json.dump(data, f)
+
+
+def _ensure_job_id_metadata(job_dir: Path, job_id: str) -> None:
+    data = _read_progress(job_dir)
+    if data.get("job_id") == job_id:
+        return
+    data["job_id"] = job_id
+    progress_file = job_dir / "progress.json"
+    with open(progress_file, "w", encoding="utf-8") as f:
+        json.dump(data, f)
 
 
 # ── Background job ────────────────────────────────────────────────────────────
@@ -103,7 +159,6 @@ def _download_youtube(youtube_url: str, job_dir: Path, progress_cb=None) -> Path
     if video_id_match:
         video_id = video_id_match.group(1)
         youtube_url = f"https://www.youtube.com/watch?v={video_id}"
-        print(f"Cleaned YouTube URL: {youtube_url}", flush=True)
 
     def _ydl_hook(d):
         if d['status'] == 'downloading' and progress_cb:
@@ -130,10 +185,8 @@ def _download_youtube(youtube_url: str, job_dir: Path, progress_cb=None) -> Path
         # La conversion MP3 est faite manuellement après téléchargement
     }
 
-    print(f"Starting yt-dlp download to {job_dir}", flush=True)
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
         ydl.download([youtube_url])
-    print("yt-dlp download finished", flush=True)
 
     candidates = list(job_dir.glob("original.*"))
     if not candidates:
@@ -164,25 +217,23 @@ def _run_job(
         log.info("Job %s started, file=%s youtube=%s", job_id, saved_file_path, youtube_url)
 
         def on_progress(p: int, msg: str = ""):
-            log.debug("Job %s progress %s%% %s", job_id, p, msg)
-            _write_progress(job_dir, p, msg)
+            _write_progress(job_dir, p, msg, job_id=job_id)
 
         if youtube_url:
-            _write_progress(job_dir, 3, "Téléchargement YouTube...")
+            _write_progress(job_dir, 3, "Téléchargement YouTube...", job_id=job_id)
             file_path = _download_youtube(youtube_url, job_dir, progress_cb=on_progress)
-            _write_progress(job_dir, 12, "Démarrage de la séparation...")
+            _write_progress(job_dir, 12, "Démarrage de la séparation...", job_id=job_id)
         else:
-            _write_progress(job_dir, 10, "Démarrage de la séparation...")
+            _write_progress(job_dir, 10, "Démarrage de la séparation...", job_id=job_id)
 
         log.info("Job %s calling process_audio", job_id)
         process_audio(str(file_path), str(job_dir), progress_callback=on_progress)
         log.info("Job %s completed", job_id)
-        _write_progress(job_dir, 100, "Terminé !", status="completed")
+        _write_progress(job_dir, 100, "Terminé !", status="completed", job_id=job_id)
 
     except Exception as e:
         log.exception("Job %s failed: %s", job_id, e)
-        print(f"ERROR: Job {job_id} failed: {e}", flush=True)
-        _write_progress(job_dir, 0, str(e), status="error")
+        _write_progress(job_dir, 0, str(e), status="error", job_id=job_id)
 
 
 # ── Models ────────────────────────────────────────────────────────────────────
@@ -204,7 +255,7 @@ async def upload_audio(
     job_dir = STORAGE_DIR / job_id
     job_dir.mkdir(parents=True, exist_ok=True)
 
-    _write_progress(job_dir, 0, "Initialisation...")
+    _write_progress(job_dir, 0, "Initialisation...", job_id=job_id)
 
     saved_file_path: Optional[Path] = None
 
@@ -233,9 +284,7 @@ async def upload_audio(
 @app.get("/api/status/{job_id}")
 async def get_status(job_id: str):
     """Retourne la progression du job."""
-    job_dir = STORAGE_DIR / job_id
-    if not job_dir.exists():
-        raise HTTPException(status_code=404, detail="Job not found")
+    job_dir = _require_job_dir(job_id)
 
     progress_file = job_dir / "progress.json"
     if progress_file.exists():
@@ -256,10 +305,7 @@ async def get_status(job_id: str):
 @app.get("/api/tracks/{job_id}")
 async def get_tracks(job_id: str):
     """Récupère les URLs des 4 stems."""
-    job_dir = STORAGE_DIR / job_id
-
-    if not job_dir.exists():
-        raise HTTPException(status_code=404, detail="Job not found")
+    job_dir = _require_job_dir(job_id)
 
     stem_names = ["vocals", "drums", "bass", "other"]
     stems = {}
@@ -281,7 +327,8 @@ async def get_tracks(job_id: str):
 @app.get("/api/stream/{job_id}/{filename}")
 async def stream_audio(job_id: str, filename: str):
     """Streame un fichier audio."""
-    file_path = STORAGE_DIR / job_id / filename
+    job_dir = _require_job_dir(job_id)
+    file_path = job_dir / filename
 
     if not file_path.exists():
         raise HTTPException(status_code=404, detail="File not found")
@@ -299,10 +346,7 @@ async def stream_audio(job_id: str, filename: str):
 @app.post("/api/export")
 async def export_mix(request: ExportRequest):
     """Génère un mix personnalisé selon les stems mutés."""
-    job_dir = STORAGE_DIR / request.job_id
-
-    if not job_dir.exists():
-        raise HTTPException(status_code=404, detail="Job not found")
+    job_dir = _require_job_dir(request.job_id)
 
     try:
         output_path = create_mix(str(job_dir), request.muted_stems)
@@ -318,10 +362,7 @@ async def export_mix(request: ExportRequest):
 @app.get("/api/export/daw/{job_id}")
 async def export_daw_pack(job_id: str):
     """Génère un pack ZIP prêt à importer dans un DAW."""
-    job_dir = STORAGE_DIR / job_id
-
-    if not job_dir.exists():
-        raise HTTPException(status_code=404, detail="Job not found")
+    job_dir = _require_job_dir(job_id)
 
     try:
         output_path = create_daw_export(str(job_dir), job_id)
@@ -339,9 +380,7 @@ async def export_daw_pack(job_id: str):
 @app.get("/api/bpm/{job_id}")
 async def get_bpm(job_id: str):
     """Détecte le BPM d'un job (résultat mis en cache dans bpm.json)."""
-    job_dir = STORAGE_DIR / job_id
-    if not job_dir.exists():
-        raise HTTPException(status_code=404, detail="Job not found")
+    job_dir = _require_job_dir(job_id)
 
     bpm_file = job_dir / "bpm.json"
     if bpm_file.exists():
@@ -392,7 +431,10 @@ async def list_jobs():
         if not job_dir.is_dir():
             continue
 
-        job_id = job_dir.name
+        data: dict = _read_progress(job_dir)
+        job_id = data.get("job_id") or job_dir.name
+        if data.get("job_id") != job_id:
+            _ensure_job_id_metadata(job_dir, job_id)
 
         original_file = job_dir / "original.mp3"
         if not original_file.exists():
@@ -411,10 +453,7 @@ async def list_jobs():
         favorite = False
         duration_s = None
         progress_file = job_dir / "progress.json"
-        data: dict = {}
         if progress_file.exists():
-            with open(progress_file) as f:
-                data = json.load(f)
             name = data.get("name")
             favorite = data.get("favorite", False)
             duration_s = data.get("duration_s")
@@ -424,7 +463,8 @@ async def list_jobs():
                 audio = AudioSegment.from_file(str(original_file))
                 duration_s = round(len(audio) / 1000)
                 data["duration_s"] = duration_s
-                with open(progress_file, "w") as f:
+                data.setdefault("job_id", job_id)
+                with open(progress_file, "w", encoding="utf-8") as f:
                     json.dump(data, f)
             except Exception:
                 pass
@@ -456,18 +496,14 @@ class FavoriteRequest(BaseModel):
 @app.patch("/api/jobs/{job_id}/favorite")
 async def set_job_favorite(job_id: str, body: FavoriteRequest):
     """Met à jour le statut favori d'un job."""
-    job_dir = STORAGE_DIR / job_id
-    if not job_dir.exists():
-        raise HTTPException(status_code=404, detail="Job not found")
+    job_dir = _require_job_dir(job_id)
 
     progress_file = job_dir / "progress.json"
-    data: dict = {}
-    if progress_file.exists():
-        with open(progress_file) as f:
-            data = json.load(f)
+    data: dict = _read_progress(job_dir)
 
     data["favorite"] = body.favorite
-    with open(progress_file, "w") as f:
+    data.setdefault("job_id", job_id)
+    with open(progress_file, "w", encoding="utf-8") as f:
         json.dump(data, f)
 
     return {"job_id": job_id, "favorite": body.favorite}
@@ -476,18 +512,14 @@ async def set_job_favorite(job_id: str, body: FavoriteRequest):
 @app.patch("/api/jobs/{job_id}/name")
 async def rename_job(job_id: str, body: RenameRequest):
     """Met à jour le nom personnalisé d'un job."""
-    job_dir = STORAGE_DIR / job_id
-    if not job_dir.exists():
-        raise HTTPException(status_code=404, detail="Job not found")
+    job_dir = _require_job_dir(job_id)
 
     progress_file = job_dir / "progress.json"
-    data: dict = {}
-    if progress_file.exists():
-        with open(progress_file) as f:
-            data = json.load(f)
+    data: dict = _read_progress(job_dir)
 
     data["name"] = body.name.strip()
-    with open(progress_file, "w") as f:
+    data.setdefault("job_id", job_id)
+    with open(progress_file, "w", encoding="utf-8") as f:
         json.dump(data, f)
 
     return {"job_id": job_id, "name": data["name"]}
@@ -496,10 +528,7 @@ async def rename_job(job_id: str, body: RenameRequest):
 @app.delete("/api/jobs/{job_id}")
 async def delete_job(job_id: str):
     """Supprime un job et tous ses fichiers."""
-    job_dir = STORAGE_DIR / job_id
-
-    if not job_dir.exists():
-        raise HTTPException(status_code=404, detail="Job not found")
+    job_dir = _require_job_dir(job_id)
 
     try:
         shutil.rmtree(job_dir)

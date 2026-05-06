@@ -25,6 +25,24 @@ export interface Stems {
   other: string;
 }
 
+export interface DownloadPayload {
+  blob: Blob;
+  filename: string;
+}
+
+function getFilenameFromResponse(res: Response, fallback: string): string {
+  const cd = res.headers.get("content-disposition") || "";
+  const utf8Match = cd.match(/filename\*=UTF-8''([^;]+)/i);
+  if (utf8Match?.[1]) {
+    return decodeURIComponent(utf8Match[1]);
+  }
+  const asciiMatch = cd.match(/filename="?([^";]+)"?/i);
+  if (asciiMatch?.[1]) {
+    return asciiMatch[1];
+  }
+  return fallback;
+}
+
 export async function uploadFile(file: File): Promise<{ job_id: string }> {
   const formData = new FormData();
   formData.append("file", file);
@@ -95,20 +113,32 @@ export async function deleteJob(jobId: string): Promise<void> {
 export async function exportMix(
   jobId: string,
   mutedStems: string[],
-): Promise<Blob> {
+): Promise<DownloadPayload> {
   const res = await fetch(`${API_BASE}/api/export`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ job_id: jobId, muted_stems: mutedStems }),
   });
   if (!res.ok) throw new Error(await res.text());
-  return res.blob();
+  return {
+    blob: await res.blob(),
+    filename: getFilenameFromResponse(
+      res,
+      `stemcut_mix_${jobId.slice(0, 8)}.mp3`,
+    ),
+  };
 }
 
-export async function exportDawPack(jobId: string): Promise<Blob> {
+export async function exportDawPack(jobId: string): Promise<DownloadPayload> {
   const res = await fetch(`${API_BASE}/api/export/daw/${jobId}`);
   if (!res.ok) throw new Error(await res.text());
-  return res.blob();
+  return {
+    blob: await res.blob(),
+    filename: getFilenameFromResponse(
+      res,
+      `stemcut_daw_${jobId.slice(0, 8)}.zip`,
+    ),
+  };
 }
 
 export function stemStreamUrl(jobId: string, stem: string): string {
