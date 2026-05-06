@@ -108,10 +108,26 @@ def _process_via_api(
         t = threading.Thread(target=_heartbeat, args=(stop_init, progress_callback, 11, "Initialisation des modules IA..."), daemon=True)
         t.start()
 
+    import time as _time
+    _t_start = _time.time()
+    print("🔧 [init] importing torch...", flush=True)
     import torch
+    print(f"🔧 [init] torch imported in {_time.time()-_t_start:.1f}s", flush=True)
+
+    _t2 = _time.time()
+    print("🔧 [init] importing demucs.pretrained...", flush=True)
     from demucs.pretrained import get_model
+    print(f"🔧 [init] demucs.pretrained imported in {_time.time()-_t2:.1f}s", flush=True)
+
+    _t3 = _time.time()
+    print("🔧 [init] importing demucs.apply...", flush=True)
     from demucs.apply import apply_model
+    print(f"🔧 [init] demucs.apply imported in {_time.time()-_t3:.1f}s", flush=True)
+
+    _t4 = _time.time()
+    print("🔧 [init] importing demucs.audio...", flush=True)
     from demucs.audio import save_audio
+    print(f"🔧 [init] demucs.audio imported in {_time.time()-_t4:.1f}s  —  total init: {_time.time()-_t_start:.1f}s", flush=True)
 
     stop_init.set()
 
