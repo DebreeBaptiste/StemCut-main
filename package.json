@@ -31,6 +31,7 @@
       "target": [
         "dmg"
       ],
+      "notarize": false,
       "hardenedRuntime": true,
       "gatekeeperAssess": false,
       "entitlements": "scripts/entitlements.mac.plist",
