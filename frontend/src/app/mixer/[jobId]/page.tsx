@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import {
   ArrowLeft,
   Play,
@@ -22,10 +23,10 @@ import {
 import { useMetronome } from "@/hooks/useMetronome";
 
 const STEMS = [
-  { key: "vocals", label: "Chant", color: "#f97316" },
-  { key: "drums", label: "Batterie", color: "#3b82f6" },
-  { key: "bass", label: "Basse", color: "#22c55e" },
-  { key: "other", label: "Autre", color: "#8b5cf6" },
+  { key: "vocals", color: "#f97316" },
+  { key: "drums", color: "#3b82f6" },
+  { key: "bass", color: "#22c55e" },
+  { key: "other", color: "#8b5cf6" },
 ] as const;
 
 type StemKey = (typeof STEMS)[number]["key"];
@@ -39,6 +40,14 @@ function formatTime(sec: number): string {
 export default function MixerPage() {
   const { jobId } = useParams<{ jobId: string }>();
   const router = useRouter();
+  const t = useTranslations("mixer");
+
+  const stemLabels: Record<StemKey, string> = {
+    vocals: t("stemVocals"),
+    drums: t("stemDrums"),
+    bass: t("stemBass"),
+    other: t("stemOther"),
+  };
 
   const [stems, setStems] = useState<Stems | null>(null);
   const [loadError, setLoadError] = useState("");
@@ -123,10 +132,8 @@ export default function MixerPage() {
   useEffect(() => {
     getStems(jobId)
       .then(({ stems }) => setStems(stems))
-      .catch(() =>
-        setLoadError("Impossible de charger les stems. Job introuvable."),
-      );
-  }, [jobId]);
+      .catch(() => setLoadError(t("loadError")));
+  }, [jobId, t]);
 
   // Fetch BPM once stems are loaded
   useEffect(() => {
@@ -137,7 +144,7 @@ export default function MixerPage() {
         setBpm(Math.round(b));
         setFirstBeat(first_beat);
       })
-      .catch(() => {}) // BPM optionnel — pas bloquant
+      .catch(() => {})
       .finally(() => setBpmLoading(false));
   }, [jobId, stems]);
 
@@ -219,7 +226,6 @@ export default function MixerPage() {
       all.forEach((ws) => ws.pause());
       setIsPlaying(false);
     } else {
-      // Si une boucle est sélectionnée, repositionner au début de la boucle avant de jouer
       const { enabled, start } = loopRef.current;
       const dur = durationRef.current;
       if (enabled && dur > 0) {
@@ -243,9 +249,6 @@ export default function MixerPage() {
     STEMS.forEach(({ key }) => waveRefs.current[key]?.seekTo(t / dur));
     setCurrentTime(t);
   }, []);
-
-  // Click on a waveform → seek there (unless in loop selection mode)
-  // (handleWaveformMouseDown below handles both seek and loop selection)
 
   // Get audio time from mouse X relative to a DOM rect
   const getTimeFromRect = useCallback(
@@ -322,7 +325,6 @@ export default function MixerPage() {
         const end = liveLoopEndRef.current;
         const dur = durationRef.current;
         if (start !== null && end !== null && end - start > 0.3 && dur > 0) {
-          // Boucle valide → seek au début de la boucle
           STEMS.forEach(({ key }) =>
             waveRefs.current[key]?.seekTo(start / dur),
           );
@@ -399,23 +401,17 @@ export default function MixerPage() {
           base64,
           filename,
         );
-        addToast(
-          "success",
-          `Enregistré dans Téléchargements : ${savedPath.split(/[\\/]/).pop()}`,
-        );
+        addToast("success", t("toastSaved", { filename: savedPath.split(/[\\/]/).pop() ?? filename }));
       } else {
         triggerBrowserDownload(blob, filename);
-        addToast("success", `Téléchargement lancé : ${filename}`);
+        addToast("success", t("toastDownload", { filename }));
       }
     } catch (err) {
-      addToast(
-        "error",
-        `Erreur export : ${err instanceof Error ? err.message : String(err)}`,
-      );
+      addToast("error", t("toastExportError", { error: err instanceof Error ? err.message : String(err) }));
     } finally {
       setExporting(false);
     }
-  }, [jobId, muted, addToast]);
+  }, [jobId, muted, addToast, t]);
 
   const handleDawExport = useCallback(async () => {
     setExportingDaw(true);
@@ -428,23 +424,17 @@ export default function MixerPage() {
           base64,
           filename,
         );
-        addToast(
-          "success",
-          `Pack DAW enregistré : ${savedPath.split(/[\\/]/).pop()}`,
-        );
+        addToast("success", t("toastDawSaved", { filename: savedPath.split(/[\\/]/).pop() ?? filename }));
       } else {
         triggerBrowserDownload(blob, filename);
-        addToast("success", `Téléchargement lancé : ${filename}`);
+        addToast("success", t("toastDownload", { filename }));
       }
     } catch (err) {
-      addToast(
-        "error",
-        `Erreur export DAW : ${err instanceof Error ? err.message : String(err)}`,
-      );
+      addToast("error", t("toastDawError", { error: err instanceof Error ? err.message : String(err) }));
     } finally {
       setExportingDaw(false);
     }
-  }, [jobId, addToast]);
+  }, [jobId, addToast, t]);
 
   const triggerBrowserDownload = (blob: Blob, filename: string) => {
     const url = URL.createObjectURL(blob);
@@ -465,8 +455,7 @@ export default function MixerPage() {
         const base64 = dataUrl.includes(",") ? dataUrl.split(",")[1] : "";
         resolve(base64);
       };
-      reader.onerror = () =>
-        reject(new Error("Impossible de lire le fichier d'export"));
+      reader.onerror = () => reject(new Error(t("readFileError")));
       reader.readAsDataURL(blob);
     });
 
@@ -482,7 +471,7 @@ export default function MixerPage() {
             onClick={() => router.push("/")}
             className="text-violet-400 hover:underline text-sm"
           >
-            ← Retour à l&apos;accueil
+            {t("backHome")}
           </button>
         </div>
       </div>
@@ -495,7 +484,7 @@ export default function MixerPage() {
         className="min-h-screen flex items-center justify-center"
         style={{ background: "#0a0a12" }}
       >
-        <p className="text-gray-500 text-sm">Chargement des stems...</p>
+        <p className="text-gray-500 text-sm">{t("loadingStems")}</p>
       </div>
     );
   }
@@ -527,16 +516,14 @@ export default function MixerPage() {
 
         <div className="flex-1">
           <p className="text-gray-600 text-xs font-medium tracking-widest uppercase">
-            Projet
+            {t("headerProject")}
           </p>
-          <p className="text-white font-semibold text-sm">Mixer multi-pistes</p>
+          <p className="text-white font-semibold text-sm">{t("headerTitle")}</p>
         </div>
 
         <div className="flex items-center gap-3">
           <p className="text-gray-500 text-xs">
-            {allReady
-              ? "Les pistes mutées seront silencieuses dans l'export"
-              : "Chargement des waveforms..."}
+            {allReady ? t("exportHint") : t("loadingWaveforms")}
           </p>
           <button
             onClick={handleDawExport}
@@ -545,7 +532,7 @@ export default function MixerPage() {
             style={{ background: "#1f2937", border: "1px solid #374151" }}
           >
             <FolderArchive size={14} />
-            {exportingDaw ? "Pack DAW..." : "Exporter DAW (ZIP)"}
+            {exportingDaw ? t("exportDawLoading") : t("exportDaw")}
           </button>
           <button
             onClick={handleExport}
@@ -554,17 +541,18 @@ export default function MixerPage() {
             style={{ background: "linear-gradient(135deg, #7c3aed, #d946ef)" }}
           >
             <Download size={14} />
-            {exporting ? "Export..." : "Exporter un mix"}
+            {exporting ? t("exportLoading") : t("exportMix")}
           </button>
         </div>
       </header>
 
       {/* Tracks */}
       <div className="flex-1 overflow-y-auto py-4 px-6 flex flex-col gap-3">
-        {STEMS.map(({ key, label, color }) => {
+        {STEMS.map(({ key, color }) => {
           const isMuted = muted[key];
           const isSolo = solo[key];
           const vol = volumes[key];
+          const label = stemLabels[key];
 
           return (
             <div
@@ -577,7 +565,7 @@ export default function MixerPage() {
                 className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 text-white font-bold text-xs"
                 style={{ background: color }}
               >
-                {label[0]}
+                {label[0].toUpperCase()}
               </div>
 
               {/* Label + controls */}
@@ -697,8 +685,8 @@ export default function MixerPage() {
         {loopMode && (
           <p className="text-amber-400 text-xs mb-2 text-center">
             {hasLoop
-              ? `⟳ Boucle : ${formatTime(loopStart!)} → ${formatTime(loopEnd!)}`
-              : "Glissez sur la barre pour sélectionner un passage à boucler"}
+              ? t("loopActive", { start: formatTime(loopStart!), end: formatTime(loopEnd!) })
+              : t("loopHint")}
           </p>
         )}
 
@@ -823,9 +811,7 @@ export default function MixerPage() {
                       border: "1px solid #2e2e4e",
                     }}
                   >
-                    {metroEnabled
-                      ? "Désactiver le métronome"
-                      : "Activer le métronome"}
+                    {metroEnabled ? t("metroDisable") : t("metroEnable")}
                   </div>
                 </div>
               )}
@@ -841,7 +827,7 @@ export default function MixerPage() {
                   onChange={(e) => setMetroVolume(parseFloat(e.target.value))}
                   className="w-16"
                   style={{ accentColor: "#818cf8" }}
-                  title="Volume métronome"
+                  title={t("metroVolume")}
                 />
               )}
             </div>
@@ -867,9 +853,7 @@ export default function MixerPage() {
               className="absolute bottom-full mb-2 right-0 px-2.5 py-1.5 rounded-lg text-xs text-white whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none"
               style={{ background: "#1e1e2e", border: "1px solid #2e2e4e" }}
             >
-              {loopMode
-                ? "Désactiver la boucle"
-                : "Sélectionner une section à jouer en boucle"}
+              {loopMode ? t("loopDisable") : t("loopEnable")}
             </div>
           </div>
 
@@ -911,13 +895,13 @@ export default function MixerPage() {
           pointerEvents: "none",
         }}
       >
-        {toasts.map((t) => (
+        {toasts.map((toast) => (
           <div
-            key={t.id}
+            key={toast.id}
             style={{
-              background: t.type === "success" ? "#1a2e1a" : "#2e1a1a",
-              border: `1px solid ${t.type === "success" ? "#22c55e" : "#ef4444"}`,
-              color: t.type === "success" ? "#86efac" : "#fca5a5",
+              background: toast.type === "success" ? "#1a2e1a" : "#2e1a1a",
+              border: `1px solid ${toast.type === "success" ? "#22c55e" : "#ef4444"}`,
+              color: toast.type === "success" ? "#86efac" : "#fca5a5",
               borderRadius: "12px",
               padding: "12px 16px",
               fontSize: "13px",
@@ -927,8 +911,8 @@ export default function MixerPage() {
               lineHeight: 1.4,
             }}
           >
-            {t.type === "success" ? "✓ " : "✗ "}
-            {t.message}
+            {toast.type === "success" ? "✓ " : "✗ "}
+            {toast.message}
           </div>
         ))}
       </div>

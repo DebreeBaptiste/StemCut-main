@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useTranslations } from "next-intl";
 import {
   X,
   FolderOpen,
@@ -38,6 +39,7 @@ type Status = "idle" | "loading" | "success" | "error";
 type MigrateStatus = "idle" | "loading" | "success" | "error";
 
 export default function SettingsModal({ open, onClose }: Props) {
+  const t = useTranslations("settings");
   const [storageDir, setStorageDir] = useState("");
   const [status, setStatus] = useState<Status>("idle");
   const [migrateStatus, setMigrateStatus] = useState<MigrateStatus>("idle");
@@ -86,7 +88,7 @@ export default function SettingsModal({ open, onClose }: Props) {
         setStatus("idle");
       }
     } catch (e) {
-      setErrorMsg((e as Error).message || "Erreur inconnue");
+      setErrorMsg((e as Error).message || t("errorUnknown"));
       setStatus("error");
     }
   }
@@ -110,12 +112,10 @@ export default function SettingsModal({ open, onClose }: Props) {
         storageDir,
       );
       setMigrateStatus("success");
-      setMigrateMsg(
-        `${result.movedJobs} projet(s) migre(s). Dossier source conserve.`,
-      );
+      setMigrateMsg(t("migrateResult", { count: result.movedJobs }));
     } catch (e) {
       setMigrateStatus("error");
-      setErrorMsg((e as Error).message || "Erreur de migration");
+      setErrorMsg((e as Error).message || t("errorMigration"));
     }
   }
 
@@ -149,7 +149,7 @@ export default function SettingsModal({ open, onClose }: Props) {
         >
           <div>
             <h2 className="text-white font-semibold text-base tracking-tight">
-              Paramètres
+              {t("title")}
             </h2>
             <p className="text-gray-500 text-xs mt-0.5">StemCut v1.4.0</p>
           </div>
@@ -181,10 +181,10 @@ export default function SettingsModal({ open, onClose }: Props) {
               </div>
               <div>
                 <p className="text-white text-sm font-medium leading-none">
-                  Répertoire de stockage
+                  {t("storageTitle")}
                 </p>
                 <p className="text-gray-600 text-xs mt-1">
-                  Musiques et stems extraits
+                  {t("storageSubtitle")}
                 </p>
               </div>
             </div>
@@ -224,17 +224,17 @@ export default function SettingsModal({ open, onClose }: Props) {
                 {status === "loading" ? (
                   <>
                     <RotateCw size={13} className="animate-spin" />
-                    Redémarrage...
+                    {t("changeFolderLoading")}
                   </>
                 ) : status === "success" ? (
                   <>
                     <Check size={13} />
-                    Enregistré !
+                    {t("changeFolderSaved")}
                   </>
                 ) : (
                   <>
                     <FolderOpen size={13} />
-                    Changer le dossier
+                    {t("changeFolder")}
                   </>
                 )}
               </button>
@@ -244,10 +244,10 @@ export default function SettingsModal({ open, onClose }: Props) {
                 disabled={!storageDir || !isElectron}
                 className="flex items-center gap-2 px-3 py-2 rounded-xl text-xs text-gray-400 hover:text-white transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
                 style={{ border: "1px solid #1e1e2e" }}
-                title="Ouvrir dans l'explorateur"
+                title={t("openFolderTitle")}
               >
                 <FolderSearch size={13} />
-                Ouvrir
+                {t("openFolder")}
               </button>
             </div>
 
@@ -255,7 +255,7 @@ export default function SettingsModal({ open, onClose }: Props) {
             {status === "idle" && (
               <p className="text-gray-600 text-xs mt-2.5 flex items-center gap-1.5">
                 <RotateCw size={10} />
-                Changer le dossier affectera uniquement les nouveaux fichiers.
+                {t("folderHint")}
               </p>
             )}
 
@@ -275,22 +275,22 @@ export default function SettingsModal({ open, onClose }: Props) {
                   {migrateStatus === "loading" ? (
                     <>
                       <RotateCw size={13} className="animate-spin" />
-                      Migration en cours...
+                      {t("migrateLoading")}
                     </>
                   ) : migrateStatus === "success" ? (
                     <>
                       <Check size={13} />
-                      Migration terminee
+                      {t("migrateSuccess")}
                     </>
                   ) : (
                     <>
                       <FolderOpen size={13} />
-                      Migrer les anciens fichiers
+                      {t("migrateButton")}
                     </>
                   )}
                 </button>
                 <p className="text-gray-600 text-xs mt-2">
-                  Copie manuelle depuis: {previousStorageDir}
+                  {t("migrateSource", { path: previousStorageDir })}
                 </p>
                 {migrateMsg && (
                   <p className="text-green-400 text-xs mt-1">{migrateMsg}</p>
@@ -324,7 +324,7 @@ export default function SettingsModal({ open, onClose }: Props) {
             >
               <AlertCircle size={12} className="text-amber-400 shrink-0" />
               <span className="text-amber-300 text-xs">
-                Disponible uniquement dans l&apos;application desktop.
+                {t("desktopOnly")}
               </span>
             </div>
           )}

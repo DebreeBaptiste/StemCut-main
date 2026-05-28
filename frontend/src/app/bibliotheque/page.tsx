@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback, useRef, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
+import { useTranslations, useLocale } from 'next-intl'
 import {
   Music, Trash2, ChevronRight, Plus, Pencil, Check, X,
   Star, Play, Pause, Search,
@@ -11,8 +12,8 @@ import { listJobs, deleteJob, renameJob, setFavorite, stemStreamUrl, type Job } 
 
 type SortKey = 'date' | 'name' | 'size'
 
-function formatDate(ts: number): string {
-  return new Date(ts * 1000).toLocaleDateString('fr-FR', {
+function formatDate(ts: number, locale: string): string {
+  return new Date(ts * 1000).toLocaleDateString(locale, {
     day: 'numeric', month: 'short', year: 'numeric',
     hour: '2-digit', minute: '2-digit',
   })
@@ -28,12 +29,10 @@ function formatDuration(s: number): string {
   return `${m}:${sec.toString().padStart(2, '0')}`
 }
 
-function jobDisplayName(job: Job): string {
-  return job.name || `Morceau #${job.job_id.slice(0, 8)}`
-}
-
 export default function BibliothequePage() {
   const router = useRouter()
+  const t = useTranslations('library')
+  const locale = useLocale()
   const [jobs, setJobs] = useState<Job[]>([])
   const [loading, setLoading] = useState(true)
   const [totalMb, setTotalMb] = useState(0)
@@ -44,6 +43,10 @@ export default function BibliothequePage() {
   const [playingId, setPlayingId] = useState<string | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
   const audioRef = useRef<HTMLAudioElement | null>(null)
+
+  const jobDisplayName = useCallback((job: Job): string => {
+    return job.name || t('trackName', { id: job.job_id.slice(0, 8) })
+  }, [t])
 
   const load = useCallback(async () => {
     try {
@@ -74,7 +77,7 @@ export default function BibliothequePage() {
     setEditingId(job.job_id)
     setEditValue(jobDisplayName(job))
     setTimeout(() => inputRef.current?.select(), 0)
-  }, [])
+  }, [jobDisplayName])
 
   const confirmEdit = useCallback(async (jobId: string) => {
     const trimmed = editValue.trim()
@@ -114,7 +117,7 @@ export default function BibliothequePage() {
       jobDisplayName(j).toLowerCase().includes(search.toLowerCase())
     )
     filtered.sort((a, b) => {
-      if (sort === 'name') return jobDisplayName(a).localeCompare(jobDisplayName(b), 'fr')
+      if (sort === 'name') return jobDisplayName(a).localeCompare(jobDisplayName(b), locale)
       if (sort === 'size') return b.size_mb - a.size_mb
       return b.created_at - a.created_at
     })
@@ -122,7 +125,7 @@ export default function BibliothequePage() {
       ...filtered.filter(j => j.favorite),
       ...filtered.filter(j => !j.favorite),
     ]
-  }, [jobs, search, sort])
+  }, [jobs, search, sort, locale, jobDisplayName])
 
   return (
     <div className="min-h-screen" style={{ background: '#0a0a12' }}>
@@ -131,9 +134,9 @@ export default function BibliothequePage() {
       <main className="max-w-2xl mx-auto pt-28 pb-20 px-4">
         <div className="flex items-start justify-between mb-8">
           <div>
-            <h1 className="text-3xl font-extrabold text-violet-400 mb-1">Ma Bibliothèque</h1>
+            <h1 className="text-3xl font-extrabold text-violet-400 mb-1">{t('title')}</h1>
             <p className="text-gray-500 text-sm">
-              {jobs.length} morceau{jobs.length !== 1 ? 'x' : ''} importé{jobs.length !== 1 ? 's' : ''}
+              {t('tracksCount', { count: jobs.length })}
             </p>
           </div>
           <button
@@ -142,7 +145,7 @@ export default function BibliothequePage() {
             style={{ background: 'linear-gradient(135deg, #7c3aed, #d946ef)' }}
           >
             <Plus size={16} />
-            Nouveau morceau
+            {t('newTrack')}
           </button>
         </div>
 
@@ -152,7 +155,7 @@ export default function BibliothequePage() {
               <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 pointer-events-none" />
               <input
                 type="text"
-                placeholder="Rechercher..."
+                placeholder={t('searchPlaceholder')}
                 value={search}
                 onChange={e => setSearch(e.target.value)}
                 className="w-full bg-[#111118] border border-[#1e1e2e] rounded-xl pl-8 pr-3 py-2 text-sm text-white placeholder-gray-600 outline-none focus:border-violet-500/50 transition-colors"
@@ -163,29 +166,27 @@ export default function BibliothequePage() {
               onChange={e => setSort(e.target.value as SortKey)}
               className="bg-[#111118] border border-[#1e1e2e] rounded-xl px-3 py-2 text-sm text-gray-400 outline-none focus:border-violet-500/50 cursor-pointer transition-colors"
             >
-              <option value="date">Date</option>
-              <option value="name">Nom</option>
-              <option value="size">Taille</option>
+              <option value="date">{t('sortDate')}</option>
+              <option value="name">{t('sortName')}</option>
+              <option value="size">{t('sortSize')}</option>
             </select>
           </div>
         )}
 
         {loading ? (
-          <div className="text-gray-500 text-sm">Chargement...</div>
+          <div className="text-gray-500 text-sm">{t('loading')}</div>
         ) : jobs.length === 0 ? (
           <div
             className="rounded-2xl p-10 text-center"
             style={{ background: '#111118', border: '1px solid #1e1e2e' }}
           >
             <Music size={32} className="text-violet-500 mx-auto mb-3" />
-            <p className="text-gray-400">Aucun morceau importé</p>
-            <p className="text-gray-600 text-sm mt-1">
-              Importez un fichier audio ou une URL YouTube pour commencer
-            </p>
+            <p className="text-gray-400">{t('emptyTitle')}</p>
+            <p className="text-gray-600 text-sm mt-1">{t('emptyHint')}</p>
           </div>
         ) : displayedJobs.length === 0 ? (
           <div className="text-center py-10 text-gray-500 text-sm">
-            Aucun résultat pour « {search} »
+            {t('noResults', { search })}
           </div>
         ) : (
           <div className="flex flex-col gap-2">
@@ -248,13 +249,13 @@ export default function BibliothequePage() {
                     </div>
                   )}
                   <p className="text-gray-500 text-xs mt-0.5">
-                    {formatDate(job.created_at)}
+                    {formatDate(job.created_at, locale)}
                     {job.duration_s != null && ` · ${formatDuration(job.duration_s)}`}
                     {` · ${formatSize(job.size_mb)} · `}
                     {job.stems_ready ? (
-                      <span className="text-green-400">✓ Prêt</span>
+                      <span className="text-green-400">{t('statusReady')}</span>
                     ) : (
-                      <span className="text-yellow-400">En cours</span>
+                      <span className="text-yellow-400">{t('statusProcessing')}</span>
                     )}
                   </p>
                 </div>
@@ -286,7 +287,7 @@ export default function BibliothequePage() {
 
         {jobs.length > 0 && (
           <p className="text-center text-gray-600 text-xs mt-6">
-            Espace total utilisé : {totalMb.toFixed(1)} MB
+            {t('totalSpace', { size: totalMb.toFixed(1) })}
           </p>
         )}
       </main>

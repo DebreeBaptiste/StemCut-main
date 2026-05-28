@@ -3,10 +3,13 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import { Library, Settings } from 'lucide-react'
+import { useTranslations } from 'next-intl'
 import SettingsModal from './SettingsModal'
+import LanguageSelector from './LanguageSelector'
 
 export default function Navbar() {
   const [settingsOpen, setSettingsOpen] = useState(false)
+  const t = useTranslations('nav')
 
   return (
     <>
@@ -16,19 +19,21 @@ export default function Navbar() {
         </Link>
 
         <div className="flex items-center gap-4">
+          <LanguageSelector />
+
           <Link
             href="/bibliotheque"
             className="no-drag flex items-center gap-2 text-sm text-gray-400 hover:text-white transition-colors"
           >
             <Library size={16} />
-            Ma bibliothèque
+            {t('library')}
           </Link>
 
           <button
             onClick={() => setSettingsOpen(true)}
             className="no-drag w-8 h-8 rounded-lg flex items-center justify-center text-gray-400 hover:text-white transition-all"
             style={{ background: 'rgba(255,255,255,0.05)' }}
-            title="Paramètres"
+            title={t('settings')}
           >
             <Settings size={15} />
           </button>

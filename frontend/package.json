@@ -1,6 +1,6 @@
 {
   "name": "stemcut-frontend",
-  "version": "1.5.0",
+  "version": "1.5.1",
   "private": true,
   "scripts": {
     "dev": "next dev",
@@ -10,6 +10,7 @@
   "dependencies": {
     "lucide-react": "^0.414.0",
     "next": "^14.2.29",
+    "next-intl": "^4.12.0",
     "react": "^18.3.0",
     "react-dom": "^18.3.0",
     "wavesurfer.js": "^7.8.3"

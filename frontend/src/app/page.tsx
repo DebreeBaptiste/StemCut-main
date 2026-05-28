@@ -2,6 +2,7 @@
 
 import { useRef, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
+import { useTranslations } from 'next-intl';
 import {
   Mic,
   Drum,
@@ -19,46 +20,9 @@ import { uploadFile, importYoutube } from '@/lib/api';
 
 type State = 'idle' | 'processing';
 
-const BADGES = [
-  { icon: Mic, label: 'Voix' },
-  { icon: Drum, label: 'Batterie' },
-  { icon: Music, label: 'Basse' },
-  { icon: Piano, label: 'Autres' },
-];
-
-const FEATURES = [
-  {
-    icon: Scissors,
-    title: '4 stems isolés',
-    description:
-      'Séparation IA en voix, batterie, basse et instruments. Chaque piste est indépendante.',
-    color: '#7c3aed',
-  },
-  {
-    icon: Repeat,
-    title: "Boucle d'apprentissage",
-    description:
-      'Sélectionnez un passage sur la timeline et répétez-le en boucle pour maîtriser un solo.',
-    color: '#f59e0b',
-  },
-  {
-    icon: SlidersHorizontal,
-    title: 'Mixage par piste',
-    description:
-      'Volume, mute et solo par stem. Créez votre backing track en quelques clics.',
-    color: '#3b82f6',
-  },
-  {
-    icon: Download,
-    title: 'Export personnalisé',
-    description:
-      'Téléchargez votre mix sans les pistes de votre choix, directement en MP3.',
-    color: '#22c55e',
-  },
-];
-
 export default function HomePage() {
   const router = useRouter();
+  const t = useTranslations('home');
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [state, setState] = useState<State>('idle');
   const [progress, setProgress] = useState(0);
@@ -71,7 +35,7 @@ export default function HomePage() {
     async (fn: () => Promise<{ job_id: string }>) => {
       setState('processing');
       setProgress(0);
-      setProgressMsg('Initialisation...');
+      setProgressMsg(t('processingInit'));
       setError('');
 
       try {
@@ -92,7 +56,7 @@ export default function HomePage() {
             } else if (data.status === 'error') {
               setState('idle');
               setProgress(0);
-              setError(data.message || 'Une erreur est survenue');
+              setError(data.message || t('errorGeneric'));
             } else {
               setTimeout(pollStatus, 1000);
             }
@@ -106,22 +70,22 @@ export default function HomePage() {
         setState('idle');
         setProgress(0);
         setError(
-          err instanceof Error ? err.message : 'Une erreur est survenue',
+          err instanceof Error ? err.message : t('errorGeneric'),
         );
       }
     },
-    [router],
+    [router, t],
   );
 
   const handleFile = useCallback(
     (file: File) => {
       if (!file.type.startsWith('audio')) {
-        setError('Format non supporté. Utilisez MP3, WAV ou FLAC.');
+        setError(t('errorFormat'));
         return;
       }
       startProcessing(() => uploadFile(file));
     },
-    [startProcessing],
+    [startProcessing, t],
   );
 
   const handleDrop = useCallback(
@@ -153,33 +117,14 @@ export default function HomePage() {
         {/* Hero */}
         <div className='text-center mb-10 max-w-xl'>
           <h1 className='text-5xl font-extrabold leading-tight mb-4'>
-            Isolez chaque{' '}
+            {t('heroPrefix')}{' '}
             <span className='bg-gradient-to-r from-violet-400 to-fuchsia-400 bg-clip-text text-transparent'>
-              instrument
+              {t('heroHighlight')}
             </span>
             <br />
-            de vos morceaux
+            {t('heroSuffix')}
           </h1>
-          {/*  <p className='text-gray-400 text-base leading-relaxed'>
-            StemCut sépare vos pistes audio en 4 stems : voix, batterie, basse
-            et instruments. Parfait pour pratiquer, remixer ou créer des backing
-            tracks.
-          </p> */}
         </div>
-
-        {/* Badges */}
-        {/*   <div className='flex flex-wrap justify-center gap-3 mb-10'>
-          {BADGES.map(({ icon: Icon, label }) => (
-            <span
-              key={label}
-              className='flex items-center gap-2 px-4 py-2 rounded-full text-sm text-gray-300'
-              style={{ background: '#1a1a28', border: '1px solid #2e2e4e' }}
-            >
-              <Icon size={14} className='text-violet-400' />
-              {label}
-            </span>
-          ))}
-        </div> */}
 
         {/* Processing state */}
         {state === 'processing' ? (
@@ -188,7 +133,7 @@ export default function HomePage() {
             style={{ background: '#111118', border: '1px solid #1e1e2e' }}
           >
             <p className='text-center text-gray-300 mb-5 font-medium'>
-              {progressMsg || 'Séparation des stems avec Demucs...'}
+              {progressMsg || t('processingDefault')}
             </p>
             <div
               className='w-full h-2 rounded-full mb-3'
@@ -204,7 +149,7 @@ export default function HomePage() {
             </div>
             <p className='text-center text-gray-500 text-sm'>{progress}%</p>
             <p className='text-center text-gray-600 text-xs mt-3'>
-              Cela peut prendre 1 à 5 minutes selon votre machine
+              {t('processingHint')}
             </p>
           </div>
         ) : (
@@ -235,10 +180,10 @@ export default function HomePage() {
                 <CloudUpload size={24} className='text-white' />
               </div>
               <p className='text-white font-medium'>
-                Glissez-déposez un fichier audio
+                {t('dropzoneLabel')}
               </p>
               <p className='text-gray-500 text-sm'>
-                MP3, WAV, FLAC • Traitement via Demucs
+                {t('dropzoneHint')}
               </p>
               <input
                 ref={fileInputRef}
@@ -258,7 +203,7 @@ export default function HomePage() {
             >
               <p className='text-gray-500 text-xs mb-3 flex items-center gap-2'>
                 <Youtube size={14} className='text-red-500' />
-                Ou importez depuis YouTube
+                {t('youtubeLabel')}
               </p>
               <div className='flex gap-2'>
                 <input
@@ -278,7 +223,7 @@ export default function HomePage() {
                     background: 'linear-gradient(135deg, #7c3aed, #d946ef)',
                   }}
                 >
-                  Importer
+                  {t('youtubeButton')}
                 </button>
               </div>
             </div>
@@ -289,16 +234,6 @@ export default function HomePage() {
           </>
         )}
       </main>
-
-      {/* Footer */}
-      {/*   <footer
-        className='py-8 text-center'
-        style={{ borderTop: '1px solid #1e1e2e' }}
-      >
-        <p className='text-gray-600 text-xs'>
-          StemCut — Traitement 100 % local · Aucune donnée partagée
-        </p>
-      </footer> */}
     </div>
   );
 }

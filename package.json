@@ -1,6 +1,6 @@
 {
   "name": "stemcut",
-  "version": "1.5.0",
+  "version": "1.5.1",
   "description": "StemCut - Isolez chaque instrument de vos morceaux",
   "main": "electron/main.js",
   "scripts": {
@@ -31,7 +31,11 @@
       "target": [
         "dmg"
       ],
-      "identity": null,
+      "teamId": "S3AAUL8U96",
+      "hardenedRuntime": true,
+      "gatekeeperAssess": false,
+      "entitlements": "scripts/entitlements.mac.plist",
+      "entitlementsInherit": "scripts/entitlements.mac.plist",
       "extraResources": [
         {
           "from": "dist-backend/stemcut-backend",
