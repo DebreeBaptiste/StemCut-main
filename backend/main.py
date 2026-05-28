@@ -454,11 +454,26 @@ async def list_jobs():
     if not STORAGE_DIR.exists():
         return {"jobs": []}
 
+    _UUID_RE = re.compile(r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$', re.I)
+
     for job_dir in STORAGE_DIR.iterdir():
         if not job_dir.is_dir():
             continue
 
         data: dict = _read_progress(job_dir)
+
+        # Skip directories that don't look like StemCut jobs — protects against
+        # the user pointing the storage dir at a folder that contains other things.
+        stored_job_id = data.get("job_id", "")
+        has_valid_id = bool(_UUID_RE.match(stored_job_id) or _UUID_RE.match(job_dir.name))
+        has_stem_files = any(
+            (job_dir / f"{s}.mp3").exists() or (job_dir / f"{s}.wav").exists()
+            for s in ["vocals", "drums", "bass", "other"]
+        )
+        has_original = bool(list(job_dir.glob("original.*")))
+        if not (has_valid_id or has_stem_files or has_original):
+            continue
+
         job_id = data.get("job_id") or job_dir.name
         if data.get("job_id") != job_id:
             _ensure_job_id_metadata(job_dir, job_id)
@@ -474,7 +489,10 @@ async def list_jobs():
         )
 
         created_at = job_dir.stat().st_ctime
-        total_size = sum(f.stat().st_size for f in job_dir.rglob("*") if f.is_file())
+        try:
+            total_size = sum(f.stat().st_size for f in job_dir.rglob("*") if f.is_file())
+        except Exception:
+            total_size = 0
 
         name = None
         favorite = False
