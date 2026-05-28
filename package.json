@@ -1,6 +1,6 @@
 {
   "name": "stemcut",
-  "version": "1.5.1",
+  "version": "1.0.0",
   "description": "StemCut - Isolez chaque instrument de vos morceaux",
   "main": "electron/main.js",
   "scripts": {
