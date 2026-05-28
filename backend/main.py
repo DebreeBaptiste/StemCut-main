@@ -154,6 +154,20 @@ def _ensure_job_id_metadata(job_dir: Path, job_id: str) -> None:
 
 # ── Background job ────────────────────────────────────────────────────────────
 
+class _YdlLogger:
+    """Route yt-dlp output to Python logging instead of stdout/stderr.
+
+    Prevents [Errno 32] Broken pipe in frozen PyInstaller binaries where
+    writing to the stdout pipe can fail when the Electron reader isn't ready.
+    """
+    def debug(self, msg):
+        if not msg.startswith('[debug] '):
+            log.debug("yt-dlp: %s", msg)
+    def info(self, msg): log.info("yt-dlp: %s", msg)
+    def warning(self, msg): log.warning("yt-dlp: %s", msg)
+    def error(self, msg): log.error("yt-dlp: %s", msg)
+
+
 def _download_youtube(youtube_url: str, job_dir: Path, progress_cb=None) -> Path:
     video_id_match = re.search(r'(?:v=|youtu\.be/)([a-zA-Z0-9_-]{11})', youtube_url)
     if video_id_match:
@@ -176,10 +190,12 @@ def _download_youtube(youtube_url: str, job_dir: Path, progress_cb=None) -> Path
         "outtmpl": str(job_dir / "original.%(ext)s"),
         "quiet": True,
         "no_warnings": True,
+        "noprogress": True,
         "noplaylist": True,
         "ffmpeg_location": _FFMPEG_DIR,
         "socket_timeout": 30,
         "retries": 3,
+        "logger": _YdlLogger(),
         "progress_hooks": [_ydl_hook],
         # Pas de FFmpegExtractAudio : imageio_ffmpeg ne fournit pas ffprobe
         # La conversion MP3 est faite manuellement après téléchargement
