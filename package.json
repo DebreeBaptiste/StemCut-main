@@ -31,7 +31,6 @@
       "target": [
         "dmg"
       ],
-      "teamId": "S3AAUL8U96",
       "hardenedRuntime": true,
       "gatekeeperAssess": false,
       "entitlements": "scripts/entitlements.mac.plist",
