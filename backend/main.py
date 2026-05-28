@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from typing import Optional, List
+import sys
 import uuid
 import os
 import shutil
@@ -201,8 +202,18 @@ def _download_youtube(youtube_url: str, job_dir: Path, progress_cb=None) -> Path
         # La conversion MP3 est faite manuellement après téléchargement
     }
 
-    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-        ydl.download([youtube_url])
+    # yt-dlp's MultilinePrinter writes directly to sys.stdout even with quiet=True,
+    # because in a PyInstaller binary sys.stdout.isatty() returns True and bypasses
+    # the QuietMultilinePrinter branch. Redirect both streams to devnull for the
+    # duration of the download to prevent [Errno 32] Broken pipe.
+    import io
+    _old_stdout, _old_stderr = sys.stdout, sys.stderr
+    try:
+        sys.stdout = sys.stderr = io.StringIO()
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            ydl.download([youtube_url])
+    finally:
+        sys.stdout, sys.stderr = _old_stdout, _old_stderr
 
     candidates = list(job_dir.glob("original.*"))
     if not candidates:
